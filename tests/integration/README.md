@@ -22,51 +22,32 @@ exercised rather than sidestepped by pointing the crawler at `localhost`
 | File | Checks |
 |---|---|
 | `test_destination_ingestion.py` | 35 — discovery filtering and ranking, auto-crawl selection, chunks reaching Postgres and the vector store, re-run deduplication, the explicit-selection fence, auth and error mapping |
-| `test_llm_data_required.py` | 5 — `data_required` → discover → ingest → retry, and that only trusted domains are used on that unattended path |
+| `test_llm_data_required.py` | 10 — `data_required` → discover → ingest → retry, only trusted domains on that unattended path, and provenance in the event log |
+| `test_review_regressions.py` | 13 — the four code-review findings: stored-vs-canonical URL dedup, explicit selection not depending on a re-search, `data_required` skipping indexed pages, and input validation |
 
 ## Running
 
-Five processes. Ports are hardcoded; adjust in the scripts if they clash.
+`harness/up.sh` brings the whole stack up idempotently — hostnames, Postgres,
+fixture server, vector-store stub, scraper (search stubbed), admin — and
+leaves anything already healthy alone, so it is safe to re-run after a
+container restart. `reset` also clears DB rows and stub state.
 
 ```bash
-# 0. Hostnames for the fixture pages (needs root)
-echo "127.0.0.1 en.wikivoyage.org" >> /etc/hosts
-echo "127.0.0.1 www.holidify.com"  >> /etc/hosts
+# once: flyio-scraper-service/.venv installed, flyio-admin npm-installed,
+# and flyio-admin/.env pointing at this stack:
+#   PGHOST=127.0.0.1 PGPORT=5433 PGUSER=flyio PGDATABASE=flyio_admin_test
+#   SCRAPER_SERVICE_URL=http://127.0.0.1:8099  SCRAPER_SERVICE_API_KEY=live_test_key
+#   LLM_SERVICE_URL=http://127.0.0.1:8101      PORT=3100
+#   INITIAL_ADMIN_PASSWORD=integration-test-admin-pw
+#   DEFAULT_SOURCE_URLS=http://en.wikivoyage.org/wiki/Gorakhpur
 
-# 1. Postgres, and a database for the admin service
-#    Point flyio-admin/.env at it (PGPORT etc.) plus:
-#      SCRAPER_SERVICE_URL=http://127.0.0.1:8099
-#      LLM_SERVICE_URL=http://127.0.0.1:8101
-
-# 2. Fixture pages on :80  (root: it binds a privileged port)
-python3 tests/integration/harness/fixture_server.py &
-
-# 3. Vector-store stub on :8101
-python3 tests/integration/harness/stub_llm.py &
-
-# 4. Scraper service on :8099, with the search boundary stubbed
-cd flyio-scraper-service
-SERVICE_API_KEY=live_test_key SEARCH_PROVIDER=mock \
-NO_PROXY=localhost,127.0.0.1,en.wikivoyage.org,www.holidify.com \
-  .venv/bin/python ../tests/integration/harness/run_scraper_fixture.py &
-
-# 5. Admin on :3100
-cd flyio-admin && npx ts-node-dev --transpile-only src/app.ts &
-
-# Run
-python3 tests/integration/test_destination_ingestion.py
-python3 tests/integration/test_llm_data_required.py
+sudo tests/integration/harness/up.sh reset && python3 tests/integration/test_destination_ingestion.py
+sudo tests/integration/harness/up.sh reset && python3 tests/integration/test_llm_data_required.py
+python3 tests/integration/test_review_regressions.py      # resets itself
 ```
 
-Each test truncates nothing on its own: reset between runs with
-
-```sql
-TRUNCATE knowledge_base, history, job_events, jobs, prompt_history, request_events
-  RESTART IDENTITY CASCADE;
-```
-
-and restart `stub_llm.py` (it accumulates calls in memory, and both suites
-assert on the call count).
+Needs root: it binds :80 and edits `/etc/hosts`. Logs go to
+`/tmp/flyio-integration/`.
 
 ## Note on Playwright
 

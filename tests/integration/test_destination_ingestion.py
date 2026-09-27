@@ -126,15 +126,15 @@ def main():
           len(calls2.get("calls", [])) == calls_before,
           f"before={calls_before} after={len(calls2.get('calls', []))}")
 
-    print("\n=== 6. Explicit selection is honoured and fenced ===")
+    print("\n=== 6. Explicit selection is crawled exactly as approved ===")
+    # No second search: results drift between preview and click, and an
+    # approved page must not silently drop out. See test_review_regressions.
+    approved = ["http://en.wikivoyage.org/wiki/Gorakhpur"]
     st, a3 = call(f"{ADMIN}/api/admin/crawl/auto", "POST",
-                  {"destination": "Gorakhpur",
-                   "urls": ["http://en.wikivoyage.org/wiki/Gorakhpur",
-                            "https://evil.example/not-a-candidate"]}, token)
+                  {"destination": "Gorakhpur", "urls": approved}, token)
     check("explicit selection crawls", a3.get("status") == "success",
           f"status={a3.get('status')} error={a3.get('error')}")
-    check("URL not in discovery results is refused (fenced)",
-          all("evil.example" not in u for u in a3.get("urls", [])), str(a3.get("urls")))
+    check("exactly the approved URLs were submitted", a3.get("urls") == approved, str(a3.get("urls")))
 
     print("\n=== 7. Error handling ===")
     st, _ = call(f"{ADMIN}/api/admin/discover", "POST", {"destination": "Jabalpur"})

@@ -19,6 +19,10 @@ import {
   waitForJobCompletion,
 } from "../services/jobScheduler";
 import {
+  annotateWithIndexState,
+  crawlUrlFor,
+} from "../services/discovery";
+import {
   logRequestEvent,
   pushToLlmStore,
   pushAllToLlmStore,
@@ -175,10 +179,13 @@ router.post("/api/admin/llm/generate", requireAdminAuth, async (req: Request, re
       // happen to cover and then retry the LLM against knowledge that still
       // does not mention Jabalpur.
       //
-      // Only `recommended` candidates are taken — trusted domains not already
-      // indexed. An unrecognised domain is never auto-crawled on this path:
-      // there is no operator watching to approve it, which is exactly the
-      // case the review step in POST /api/admin/discover exists for.
+      // Only `recommended` candidates are taken — trusted domains that are
+      // either not indexed yet or stale. Re-crawling fresh pages here would
+      // re-embed content the LLM has already told us is insufficient, adding
+      // latency and embedding cost to this user's request for no new
+      // knowledge. And an unrecognised domain is never auto-crawled on this
+      // path: there is no operator watching to approve it, which is exactly
+      // the case the review step in POST /api/admin/discover exists for.
       const requestedDestination =
         typeof destination === "string" && destination.trim()
           ? destination.trim()
@@ -189,19 +196,25 @@ router.post("/api/admin/llm/generate", requireAdminAuth, async (req: Request, re
       if (targetUrls.length === 0 && requestedDestination) {
         try {
           const discovery = await discoverUrls(requestedDestination);
-          targetUrls = discovery.candidates
-            .filter((c) => c.trusted)
-            .map((c) => c.url);
+          const candidates = await annotateWithIndexState(discovery.candidates);
+          targetUrls = candidates.filter((c) => c.recommended).map(crawlUrlFor);
+          const skippedAlreadyIndexed = candidates
+            .filter((c) => c.trusted && c.already_indexed && !c.stale)
+            .map((c) => c.indexed_url ?? c.url);
 
           await logRequestEvent(requestId, "sources_discovered", {
             service: "admin",
             status: targetUrls.length > 0 ? "success" : "warning",
-            message: `Discovery found ${targetUrls.length} trusted source(s) for '${requestedDestination}'`,
+            message:
+              targetUrls.length > 0
+                ? `Discovery found ${targetUrls.length} new trusted source(s) for '${requestedDestination}'`
+                : `Discovery found no new trusted sources for '${requestedDestination}' (${skippedAlreadyIndexed.length} already indexed)`,
             metadata: {
               destination: requestedDestination,
               provider: discovery.provider,
               considered: discovery.considered,
               urls: targetUrls,
+              skipped_already_indexed: skippedAlreadyIndexed,
               search_errors: discovery.errors,
             },
           });

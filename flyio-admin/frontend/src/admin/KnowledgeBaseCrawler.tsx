@@ -95,6 +95,8 @@ export const KnowledgeBaseCrawler: React.FC<{ onCrawlComplete: () => void }> = (
   const [jobStatus, setJobStatus] = useState<string | null>(null);
   const [urlCards, setUrlCards] = useState<UrlCardState[]>([]);
   const [globalError, setGlobalError] = useState<string | null>(null);
+  /** Informational outcome that is neither progress nor an error. */
+  const [notice, setNotice] = useState<string | null>(null);
   const [tick, setTick] = useState(0); // used to refresh live timers
   const pollRef = useRef<ReturnType<typeof setInterval> | null>(null);
   const tickRef = useRef<ReturnType<typeof setInterval> | null>(null);
@@ -271,11 +273,24 @@ export const KnowledgeBaseCrawler: React.FC<{ onCrawlComplete: () => void }> = (
     setJobId(null);
     setJobStatus("queued");
     setGlobalError(null);
+    setNotice(null);
     stopPolling();
 
     try {
       // 2. Fire async job — returns job_id immediately
       const response = await submit();
+
+      if (!response.job_id && !response.results) {
+        // Nothing was sent to the scraper (e.g. "skipped": everything is
+        // already indexed), so there is no progress to show. Leaving the
+        // optimistic cards up kept them on "queued" forever and reported a
+        // crawl that never happened as complete.
+        setUrlCards([]);
+        setJobStatus(null);
+        setSubmitting(false);
+        setNotice(response.detail || "Nothing needed crawling.");
+        return;
+      }
 
       if (!response.job_id) {
         // Sync response (backend returned results directly)
@@ -332,6 +347,7 @@ export const KnowledgeBaseCrawler: React.FC<{ onCrawlComplete: () => void }> = (
 
     setDiscovering(true);
     setGlobalError(null);
+    setNotice(null);
     setDiscovery(null);
     setSelectedUrls(new Set());
     setUrlCards([]);
@@ -397,6 +413,7 @@ export const KnowledgeBaseCrawler: React.FC<{ onCrawlComplete: () => void }> = (
     setDiscovery(null);
     setSelectedUrls(new Set());
     setGlobalError(null);
+    setNotice(null);
     setJobId(null);
     setJobStatus(null);
     setSubmitting(false);
@@ -668,6 +685,17 @@ export const KnowledgeBaseCrawler: React.FC<{ onCrawlComplete: () => void }> = (
         )}
       </div>
       </>
+      )}
+
+      {notice && (
+        <div
+          className="admin-toast"
+          role="status"
+          style={{ marginTop: "1.25rem", background: "var(--admin-accent-bg)", color: "var(--admin-accent)" }}
+        >
+          <Database size={14} style={{ flexShrink: 0 }} />
+          {notice}
+        </div>
       )}
 
       {/* Global submission error */}

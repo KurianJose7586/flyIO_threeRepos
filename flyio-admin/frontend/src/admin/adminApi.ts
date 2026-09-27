@@ -335,6 +335,8 @@ export interface CrawlSubmitResponse {
   success:   boolean;
   job_id?:   string;
   status?:   string;
+  /** Explanation when nothing was crawled (e.g. status "skipped"). */
+  detail?:   string;
   total?:    number;
   succeeded?: number;
   failed?:   number;

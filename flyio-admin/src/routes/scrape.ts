@@ -8,13 +8,17 @@ import {
   submitSourceScrape,
   getJobStatus,
   discoverUrls,
-  type DiscoveredUrl,
 } from "../services/scraperClient";
 import {
   logEvent,
   processJobOutcome,
   waitForJobCompletion,
 } from "../services/jobScheduler";
+import {
+  annotateWithIndexState,
+  crawlUrlFor,
+  type AnnotatedCandidate,
+} from "../services/discovery";
 
 const router = Router();
 
@@ -25,102 +29,6 @@ function isHttpUrl(u: string): boolean {
   } catch {
     return false;
   }
-}
-
-/**
- * How long a crawled URL is considered current. Past this, an already-indexed
- * URL is offered for re-crawling instead of being skipped — destination pages
- * change (prices, timings, transport), and the store has no other mechanism
- * for noticing.
- */
-const KB_FRESHNESS_DAYS = 90;
-
-export interface AnnotatedCandidate extends DiscoveredUrl {
-  /** Already present in knowledge_base. */
-  already_indexed: boolean;
-  /** Last ingest time for this URL, ISO 8601, or null if never indexed. */
-  last_indexed_at: string | null;
-  /** Chunks currently held for this URL. */
-  indexed_chunks: number;
-  /** Indexed, but older than KB_FRESHNESS_DAYS. */
-  stale: boolean;
-  /**
-   * What the automated path would do with this candidate, and why. Surfaced
-   * so an operator can see the filter's reasoning rather than a bare list.
-   */
-  recommended: boolean;
-  reason: string;
-}
-
-/**
- * Marks discovery candidates with what the knowledge base already holds.
- *
- * The scraper service is stateless by design and cannot answer this — the
- * `knowledge_base` table lives here. Doing the check before crawling is what
- * stops the same page being fetched, chunked and embedded twice: the existing
- * Jaipur document is stored twice already (57 structured chunks from the
- * crawler, 192 unstructured ones from an ad-hoc script), and those duplicates
- * compete against each other at retrieval time.
- */
-async function annotateWithIndexState(
-  candidates: DiscoveredUrl[]
-): Promise<AnnotatedCandidate[]> {
-  if (candidates.length === 0) return [];
-
-  const urls = candidates.map((c) => c.url);
-  const indexed = await query(
-    `SELECT source_url,
-            MAX(created_at) AS last_indexed_at,
-            COUNT(*)        AS chunks
-     FROM knowledge_base
-     WHERE source_url = ANY($1::text[])
-     GROUP BY source_url`,
-    [urls]
-  );
-
-  const state = new Map<string, { lastIndexedAt: Date; chunks: number }>();
-  for (const row of indexed.rows) {
-    state.set(row.source_url, {
-      lastIndexedAt: new Date(row.last_indexed_at),
-      chunks: parseInt(row.chunks, 10),
-    });
-  }
-
-  const staleBefore = Date.now() - KB_FRESHNESS_DAYS * 24 * 60 * 60 * 1000;
-
-  return candidates.map((c) => {
-    const existing = state.get(c.url);
-    const stale = existing ? existing.lastIndexedAt.getTime() < staleBefore : false;
-
-    let recommended: boolean;
-    let reason: string;
-    if (existing && !stale) {
-      recommended = false;
-      reason = `Already indexed (${existing.chunks} chunks)`;
-    } else if (existing && stale) {
-      recommended = true;
-      reason = `Indexed over ${KB_FRESHNESS_DAYS} days ago — re-crawl`;
-    } else if (c.trusted) {
-      recommended = true;
-      reason = `Trusted source (${c.domain})`;
-    } else {
-      // Deliberately surfaced rather than dropped: an unknown domain may be
-      // exactly the right source for a small destination, and that judgement
-      // is the operator's. Listed, but never auto-crawled.
-      recommended = false;
-      reason = "Unrecognised domain — review before crawling";
-    }
-
-    return {
-      ...c,
-      already_indexed: Boolean(existing),
-      last_indexed_at: existing ? existing.lastIndexedAt.toISOString() : null,
-      indexed_chunks: existing ? existing.chunks : 0,
-      stale,
-      recommended,
-      reason,
-    };
-  });
 }
 
 /**
@@ -652,9 +560,9 @@ router.post(
 // Destination in, populated knowledge base out — search, filter, crawl,
 // chunk and embed, with no URL typed by hand.
 //
-// Accepts an explicit `urls` array to crawl the operator's edited selection
-// from POST /api/admin/discover; without it, crawls everything discovery
-// recommends (trusted, and either never indexed or stale).
+// Without `urls`, crawls everything discovery recommends (trusted, and
+// either never indexed or stale). With `urls`, crawls exactly that reviewed
+// selection from POST /api/admin/discover — see the note in the handler.
 // ─────────────────────────────────────────────────────────────
 router.post(
   "/api/admin/crawl/auto",
@@ -677,67 +585,98 @@ router.post(
         });
         return;
       }
+      const dest = destination.trim();
 
-      const discovery = await discoverUrls(destination.trim(), maxUrls);
-      const candidates = await annotateWithIndexState(discovery.candidates);
+      let submittedUrls: string[];
+      let candidates: AnnotatedCandidate[] | undefined;
+      let searchErrors: string[] = [];
+      let provenance: Record<string, unknown>;
 
-      // An explicit list is an operator decision that has already been made,
-      // so it is honoured as given — including an unrecognised domain they
-      // chose to trust. It is still intersected with what discovery returned,
-      // so this endpoint can never be used to crawl an arbitrary URL that
-      // bypassed the filters; /api/admin/crawl already exists for that.
-      let selected: AnnotatedCandidate[];
-      if (Array.isArray(approvedUrls) && approvedUrls.length > 0) {
-        const approved = new Set<string>(approvedUrls);
-        selected = candidates.filter((c) => approved.has(c.url));
+      if (approvedUrls != null) {
+        // An explicit list is a decision the operator already made from the
+        // preview, so it is crawled as given and search is not consulted
+        // again. It used to be intersected with a fresh discovery run, but
+        // search results drift between the preview and the click (and a
+        // failed query drops its hits), so approved pages were silently
+        // skipped. That intersection guarded nothing: /api/admin/crawl
+        // already accepts arbitrary URLs from the same authenticated admin.
+        if (
+          !Array.isArray(approvedUrls) ||
+          approvedUrls.length === 0 ||
+          approvedUrls.some((u) => typeof u !== "string")
+        ) {
+          res.status(400).json({
+            success: false,
+            error: "Bad Request",
+            detail: "Field 'urls', when given, must be a non-empty array of URL strings. Omit it to crawl what discovery recommends.",
+          });
+          return;
+        }
+        submittedUrls = [...new Set((approvedUrls as string[]).map((u) => u.trim()).filter(Boolean))];
+        const invalidUrls = submittedUrls.filter((u) => !isHttpUrl(u));
+        if (submittedUrls.length === 0 || invalidUrls.length > 0) {
+          res.status(400).json({
+            success: false,
+            error: "Bad Request",
+            detail: `Not a valid http(s) URL: ${invalidUrls.join(", ") || "(empty)"}.`,
+          });
+          return;
+        }
+        provenance = { destination: dest, source: "operator_selection", selected: submittedUrls };
       } else {
-        selected = candidates.filter((c) => c.recommended);
-      }
+        const discovery = await discoverUrls(dest, maxUrls);
+        candidates = await annotateWithIndexState(discovery.candidates);
+        searchErrors = discovery.errors;
+        const selected = candidates.filter((c) => c.recommended);
 
-      if (selected.length === 0) {
-        // Not an error: "everything for this destination is already indexed"
-        // is the expected steady state, and re-running must be a no-op rather
-        // than a duplicate ingest. The candidates come back so the caller can
-        // see why nothing was selected and override if they disagree.
-        res.json({
-          success: true,
+        if (selected.length === 0) {
+          // Not an error: "everything for this destination is already
+          // indexed" is the expected steady state, and re-running must be a
+          // no-op rather than a duplicate ingest. The candidates come back
+          // so the caller can see why nothing was selected and override.
+          res.json({
+            success: true,
+            destination: discovery.destination,
+            job_id: null,
+            status: "skipped",
+            detail:
+              candidates.length === 0
+                ? `No usable sources found for '${discovery.destination}'. Every search result was filtered out as a denied domain or a non-document URL.`
+                : `Nothing to crawl for '${discovery.destination}' — all ${candidates.length} candidate(s) are already indexed or need manual review.`,
+            candidates,
+            errors: searchErrors,
+          });
+          return;
+        }
+
+        submittedUrls = selected.map(crawlUrlFor);
+        provenance = {
           destination: discovery.destination,
-          job_id: null,
-          status: "skipped",
-          detail:
-            candidates.length === 0
-              ? `No usable sources found for '${discovery.destination}'. Every search result was filtered out as a denied domain or a non-document URL.`
-              : `Nothing to crawl for '${discovery.destination}' — all ${candidates.length} candidate(s) are already indexed or need manual review.`,
-          candidates,
-          errors: discovery.errors,
-        });
-        return;
+          source: "discovery",
+          provider: discovery.provider,
+          queries: discovery.queries,
+          considered: discovery.considered,
+          selected: submittedUrls,
+          search_errors: searchErrors,
+        };
       }
 
-      const submittedUrls = selected.map((c) => c.url);
       const jobId = await startUrlCrawlJob(submittedUrls, "auto_scrape");
 
       // Recorded on the job so the destination that triggered an automated
       // crawl is recoverable afterwards — the jobs table otherwise only knows
       // about URLs, and "why was this page crawled?" has no answer.
-      await logEvent(jobId, "auto_discovered", {
-        destination: discovery.destination,
-        provider: discovery.provider,
-        queries: discovery.queries,
-        considered: discovery.considered,
-        selected: submittedUrls,
-        search_errors: discovery.errors,
-      });
+      await logEvent(jobId, "auto_discovered", provenance);
 
       if (isAsync) {
         res.json({
           success: true,
-          destination: discovery.destination,
+          destination: dest,
           job_id: jobId,
           status: "sent",
           urls: submittedUrls,
           candidates,
-          errors: discovery.errors,
+          errors: searchErrors,
         });
         return;
       }
@@ -748,7 +687,7 @@ router.post(
 
       res.status(outcome.status === "success" ? 200 : 502).json({
         success: outcome.status === "success",
-        destination: discovery.destination,
+        destination: dest,
         job_id: jobId,
         status: outcome.status,
         urls: submittedUrls,
@@ -758,7 +697,7 @@ router.post(
         failed: outcome.failed,
         results: outcome.results,
         error: outcome.status === "success" ? undefined : outcome.error || "Automated crawl failed",
-        errors: discovery.errors,
+        errors: searchErrors,
       });
     } catch (err: unknown) {
       handleDiscoveryError(err, res);
