@@ -98,3 +98,50 @@ export async function getJobStatus(
   );
   return response.data;
 }
+
+export interface DiscoveredUrl {
+  url: string;
+  title: string;
+  domain: string;
+  /** Trust score 0-100. Higher ranks first; unknown domains score 30. */
+  score: number;
+  /** True when the domain is curated-trusted or a government tourism board. */
+  trusted: boolean;
+  /** The expansion query that surfaced this URL. */
+  query: string;
+}
+
+export interface DiscoverResponse {
+  destination: string;
+  provider: string;
+  queries: string[];
+  /** Raw search hits seen before filtering — the denominator for "kept N of M". */
+  considered: number;
+  candidates: DiscoveredUrl[];
+  /** Per-query failures. Non-empty means fewer topics are represented. */
+  errors: string[];
+}
+
+/**
+ * Ask the scraper service which URLs are worth crawling for a destination.
+ * POST /scrape/discover
+ *
+ * Returns candidates only — nothing is crawled by this call. The scraper is
+ * stateless and has no view of what is already ingested, so deduplication
+ * against `knowledge_base` happens on this side (see routes/scrape.ts).
+ *
+ * Uses a longer timeout than the shared client default: this fans out into
+ * several concurrent search-API calls, and the default 30s is the budget for
+ * a single fast request.
+ */
+export async function discoverUrls(
+  destination: string,
+  maxUrls?: number
+): Promise<DiscoverResponse> {
+  const response = await scraperHttp.post<DiscoverResponse>(
+    "/scrape/discover",
+    { destination, ...(maxUrls ? { max_urls: maxUrls } : {}) },
+    { timeout: 60_000 }
+  );
+  return response.data;
+}

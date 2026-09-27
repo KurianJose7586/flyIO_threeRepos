@@ -13,6 +13,7 @@ import {
 import {
   submitUrlScrape,
   submitSourceScrape,
+  discoverUrls,
 } from "../services/scraperClient";
 import {
   waitForJobCompletion,
@@ -53,7 +54,7 @@ router.post("/api/admin/llm/generate", requireAdminAuth, async (req: Request, re
   const startTime = Date.now();
 
   try {
-    const { prompt, metadata, urls } = req.body;
+    const { prompt, metadata, urls, destination } = req.body;
 
     if (!prompt || typeof prompt !== "string" || !prompt.trim()) {
       res.status(400).json({
@@ -165,6 +166,57 @@ router.post("/api/admin/llm/generate", requireAdminAuth, async (req: Request, re
 
       if (targetUrls.length === 0) {
         targetUrls = extractUrlsFromText(prompt);
+      }
+
+      // Nothing explicit, and nothing in the prompt text. If the caller named
+      // a destination, search for sources instead of falling back to a fixed
+      // URL list: DEFAULT_SOURCE_URLS is the same handful of pages for every
+      // query, so a prompt about Jabalpur would ingest whatever those pages
+      // happen to cover and then retry the LLM against knowledge that still
+      // does not mention Jabalpur.
+      //
+      // Only `recommended` candidates are taken — trusted domains not already
+      // indexed. An unrecognised domain is never auto-crawled on this path:
+      // there is no operator watching to approve it, which is exactly the
+      // case the review step in POST /api/admin/discover exists for.
+      const requestedDestination =
+        typeof destination === "string" && destination.trim()
+          ? destination.trim()
+          : typeof metadata?.destination === "string" && metadata.destination.trim()
+            ? metadata.destination.trim()
+            : null;
+
+      if (targetUrls.length === 0 && requestedDestination) {
+        try {
+          const discovery = await discoverUrls(requestedDestination);
+          targetUrls = discovery.candidates
+            .filter((c) => c.trusted)
+            .map((c) => c.url);
+
+          await logRequestEvent(requestId, "sources_discovered", {
+            service: "admin",
+            status: targetUrls.length > 0 ? "success" : "warning",
+            message: `Discovery found ${targetUrls.length} trusted source(s) for '${requestedDestination}'`,
+            metadata: {
+              destination: requestedDestination,
+              provider: discovery.provider,
+              considered: discovery.considered,
+              urls: targetUrls,
+              search_errors: discovery.errors,
+            },
+          });
+        } catch (discoverErr: unknown) {
+          // Discovery is an enhancement to this path, not a precondition —
+          // a search outage must not turn a plan request into a 5xx when the
+          // existing fallbacks can still serve it.
+          const e = discoverErr as Error;
+          await logRequestEvent(requestId, "source_discovery_failed", {
+            service: "admin",
+            status: "warning",
+            message: `Source discovery failed for '${requestedDestination}': ${e.message}. Falling back to configured sources.`,
+            metadata: { destination: requestedDestination },
+          });
+        }
       }
 
       if (targetUrls.length === 0 && env.DEFAULT_SOURCE_URLS.length > 0) {

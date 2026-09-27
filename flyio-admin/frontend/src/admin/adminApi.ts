@@ -748,3 +748,90 @@ export const getLLMServiceHealth = async (): Promise<{
   return res.data;
 };
 
+
+// ── Destination-driven discovery ─────────────────────────────────────────────
+
+export interface DiscoveredCandidate {
+  url: string;
+  title: string;
+  domain: string;
+  /** Trust score 0-100. Higher ranks first; unknown domains score 30. */
+  score: number;
+  /** Domain is curated-trusted or a government tourism board. */
+  trusted: boolean;
+  /** The expansion query that surfaced this URL. */
+  query: string;
+  /** Already present in knowledge_base. */
+  already_indexed: boolean;
+  last_indexed_at: string | null;
+  indexed_chunks: number;
+  /** Indexed, but older than the freshness window — worth re-crawling. */
+  stale: boolean;
+  /** What the automated path would do with this candidate, and why. */
+  recommended: boolean;
+  reason: string;
+}
+
+export interface DiscoverResponse {
+  success: boolean;
+  destination: string;
+  provider: string;
+  queries: string[];
+  /** Raw search hits before filtering — the denominator for "kept N of M". */
+  considered: number;
+  candidates: DiscoveredCandidate[];
+  recommended_count: number;
+  /** Per-query search failures; non-empty means thinner topic coverage. */
+  errors: string[];
+}
+
+export interface AutoCrawlResponse extends CrawlSubmitResponse {
+  destination: string;
+  /** null when nothing needed crawling — see `status: "skipped"`. */
+  job_id?: string;
+  urls?: string[];
+  candidates?: DiscoveredCandidate[];
+  detail?: string;
+  errors?: string[];
+}
+
+/**
+ * POST /api/admin/discover
+ * Destination in, reviewable candidate URLs out. Crawls nothing.
+ */
+export const discoverCandidates = async (
+  destination: string,
+  maxUrls?: number
+): Promise<DiscoverResponse> => {
+  const res = await axios.post<DiscoverResponse>(
+    "/api/admin/discover",
+    { destination, ...(maxUrls ? { max_urls: maxUrls } : {}) },
+    { headers: authHeaders() }
+  );
+  return res.data;
+};
+
+/**
+ * POST /api/admin/crawl/auto
+ *
+ * Crawls a destination. Passing `urls` crawls exactly that reviewed
+ * selection; omitting it crawls everything discovery recommends. Either way
+ * the destination is recorded on the job, so "why was this page crawled?"
+ * stays answerable afterwards.
+ */
+export const submitAutoCrawl = async (
+  destination: string,
+  options?: { urls?: string[]; maxUrls?: number; asyncMode?: boolean }
+): Promise<AutoCrawlResponse> => {
+  const asyncMode = options?.asyncMode ?? false;
+  const res = await axios.post<AutoCrawlResponse>(
+    `/api/admin/crawl/auto${asyncMode ? "?async=true" : ""}`,
+    {
+      destination,
+      ...(options?.urls ? { urls: options.urls } : {}),
+      ...(options?.maxUrls ? { max_urls: options.maxUrls } : {}),
+    },
+    { headers: authHeaders() }
+  );
+  return res.data;
+};

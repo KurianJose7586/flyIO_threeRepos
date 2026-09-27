@@ -56,7 +56,8 @@ A stateless, asynchronous web-scraping microservice built with **FastAPI**, **Cr
 ## Features
 
 - **Asynchronous Job Processing:** Jobs are queued in an in-memory FIFO queue and processed in the background without blocking API requests.
-- **Dual Scraping Strategies:**
+- **Destination Discovery:** Give it a destination name and it searches the web, filters and ranks the results, and returns the URLs worth crawling — no hand-pasted link lists. See `POST /scrape/discover`.
+- **Triple Scraping Strategies:**
   - **Custom URLs:** Scrape any list of arbitrary URLs using Crawl4AI and headless Chromium.
   - **Tourism Sources:** Crawl configured tourism portals and MediaWiki/Wikivoyage API sources.
 - **Semantic Parsing & Chunking:** Parses HTML content, cleans markup, and splits text into structured chunks with breadcrumb paths and semantic HTML.
@@ -82,6 +83,7 @@ flyio-scraper-service/
     ├── main.py               # FastAPI application factory & lifespan worker
     ├── config/               # Settings loaded via pydantic-settings
     ├── crawler/              # Async thread-pool wrapper around legacy_crawler
+    ├── discovery/            # Destination -> candidate URLs (search, filter, rank)
     ├── middleware/           # Service-to-service auth middleware
     ├── queue/                # Async worker and job queue
     ├── routes/               # API routes (/health, /scrape/*)
@@ -276,6 +278,83 @@ top-level `status` above. They exist so consumers that filter results on
 
 ---
 
+### 5. Discover Candidate URLs for a Destination
+`POST /scrape/discover` (Requires `X-Service-API-Key`)
+
+Turns a destination name into a ranked list of URLs worth crawling. This is
+the automated replacement for a human deciding which links to paste.
+
+**It crawls nothing and stores nothing.** The caller reviews (or
+auto-accepts) the candidates and submits them to `POST /scrape/urls`, so
+every page still goes through the same crawl → parse → chunk pipeline.
+
+How it works:
+
+1. **Expand** — the destination becomes five topic queries (travel guide,
+   things to do, how to reach, best time to visit, where to stay), so the
+   result covers the same sections the chunker produces rather than five
+   copies of one listicle.
+2. **Search** — queries run concurrently against the configured provider.
+   A single failing query is reported in `errors` and does not abort the rest.
+3. **Filter** — non-`http(s)` URLs, non-document extensions and denied
+   domains (Pinterest, Quora, Reddit, social, OTA booking funnels) are dropped.
+4. **Score** — Wikivoyage/Wikipedia and government tourism boards rank
+   highest, established travel publishers next, unknown domains last.
+   Unknown domains are *listed, not dropped* — with `trusted: false`, so a
+   consumer can surface them for review instead of crawling them blindly.
+5. **Deduplicate & cap** — URLs are canonicalised (tracking params and
+   fragments removed) so the same page surfacing on several queries counts
+   once, then trimmed to `DISCOVERY_MAX_URLS` with at most
+   `DISCOVERY_MAX_PER_DOMAIN` from any one site.
+
+**Request Body (JSON):**
+```json
+{
+  "destination": "Jabalpur",
+  "max_urls": 12
+}
+```
+
+**Response (`200 OK`):**
+```json
+{
+  "destination": "Jabalpur",
+  "provider": "tavily",
+  "queries": ["Jabalpur travel guide", "things to do in Jabalpur"],
+  "considered": 34,
+  "candidates": [
+    {
+      "url": "https://en.wikivoyage.org/wiki/Jabalpur",
+      "title": "Jabalpur – Travel guide at Wikivoyage",
+      "domain": "wikivoyage.org",
+      "score": 100,
+      "trusted": true,
+      "query": "Jabalpur travel guide"
+    }
+  ],
+  "errors": []
+}
+```
+
+`considered` is the raw hit count before filtering — the denominator behind
+"kept 8 of 34", which is what tells you whether the filters are too tight.
+
+**Status codes:**
+
+| Code | Meaning |
+|---|---|
+| `400` | Destination unusable, or no search provider configured (the message names the fix). |
+| `401` | Missing or invalid `X-Service-API-Key`. |
+| `422` | Body failed schema validation (e.g. `destination` shorter than 2 characters). |
+| `502` | Provider reachable but **every** query failed — deliberately not reported as "0 results found". |
+
+> **Deduplication against an existing knowledge base is the caller's job.**
+> This service is stateless and has no view of what has already been
+> ingested. `flyio-admin` owns that in its `knowledge_base` table and marks
+> candidates it already holds — see `POST /api/admin/discover` there.
+
+---
+
 ## Configuration & Environment Variables
 
 | Variable | Default | Description |
@@ -291,6 +370,12 @@ top-level `status` above. They exist so consumers that filter results on
 | `REQUEST_DELAY_SECONDS` | `2.0` | Base delay between successive requests to polite sources. |
 | `REQUEST_DELAY_JITTER` | `1.0` | Random jitter added to delays. |
 | `RESPECT_ROBOTS_TXT` | `true` | Whether to parse and respect `robots.txt`. |
+| `SEARCH_PROVIDER` | `mock` | Search backend for discovery: `tavily`, `brave`, or `mock` (offline, synthetic — **not for production**). |
+| `SEARCH_API_KEY` | `""` | API key for the chosen provider. Unused by `mock`. |
+| `DISCOVERY_RESULTS_PER_QUERY` | `5` | Hits requested per expansion query (5 queries per destination). |
+| `DISCOVERY_MAX_URLS` | `12` | Hard ceiling on candidates returned for one destination. |
+| `DISCOVERY_MAX_PER_DOMAIN` | `3` | Max candidates from any one site, preserving topic spread. |
+| `DISCOVERY_DENIED_DOMAINS` | `""` | Extra domains never to crawl, comma-separated; merged with the built-in denylist. |
 
 ---
 

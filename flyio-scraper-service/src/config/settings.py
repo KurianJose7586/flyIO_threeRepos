@@ -39,6 +39,43 @@ class Settings(BaseSettings):
     REQUEST_DELAY_JITTER: float = 1.0
     RESPECT_ROBOTS_TXT: bool = True
 
+    # ── Discovery (destination -> candidate URLs) ─────────────────────────────
+    # Used only by POST /scrape/discover. Defaults are deliberately safe: the
+    # mock provider needs no key and no network, so the endpoint works (and is
+    # testable) on a deployment that has not signed up for a search API yet.
+    # Switch to "tavily" or "brave" and set SEARCH_API_KEY for real results.
+    SEARCH_PROVIDER: str = "mock"
+    SEARCH_API_KEY: str = ""
+
+    # How many hits to request per expansion query. Five queries at 5 hits is
+    # 25 raw candidates to filter down from — enough spread that the per-domain
+    # cap has alternatives to promote, without paying for results that the
+    # DISCOVERY_MAX_URLS budget could never reach.
+    DISCOVERY_RESULTS_PER_QUERY: int = 5
+
+    # Hard ceiling on URLs handed to a crawl. Each URL costs a browser page
+    # load, a parse, and an embedding call per chunk, so this is the main cost
+    # control for the whole automated path.
+    DISCOVERY_MAX_URLS: int = 12
+
+    # Per-site ceiling within that budget. Without it the highest-scoring
+    # domain wins every slot and the topic spread the query expansion exists
+    # to create is lost — see filters.cap_candidates.
+    DISCOVERY_MAX_PER_DOMAIN: int = 3
+
+    # Deployment-specific denylist, comma-separated, merged with the built-in
+    # DENIED_DOMAINS. Lets an operator block a site that is wasting crawl
+    # budget without waiting on a code change.
+    DISCOVERY_DENIED_DOMAINS: str = ""
+
+    def get_denied_domains(self) -> frozenset[str]:
+        """Parse DISCOVERY_DENIED_DOMAINS into a set of bare domains."""
+        return frozenset(
+            d.strip().lower().removeprefix("www.")
+            for d in self.DISCOVERY_DENIED_DOMAINS.split(",")
+            if d.strip()
+        )
+
     def get_sources(self) -> list[dict]:
         """
         Returns the list of source config dicts to use for POST /scrape/sources.

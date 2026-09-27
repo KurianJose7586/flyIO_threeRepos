@@ -1,14 +1,32 @@
 import React, { useState, useEffect, useRef, useCallback } from "react";
-import { submitCrawlUrls, getJobUrlResults } from "./adminApi";
-import type { JobUrlResult } from "./adminApi";
+import {
+  submitCrawlUrls,
+  getJobUrlResults,
+  discoverCandidates,
+  submitAutoCrawl,
+} from "./adminApi";
+import type {
+  JobUrlResult,
+  CrawlSubmitResponse,
+  DiscoverResponse,
+  DiscoveredCandidate,
+} from "./adminApi";
 import {
   Globe, CheckCircle2, XCircle, Loader2, Send, Clock, Database, AlertTriangle,
+  Search, MapPin, ShieldCheck, Link2,
 } from "lucide-react";
 
 /**
  * KnowledgeBaseCrawler
  *
- * On submit → immediately shows a "queued" card for every URL.
+ * Two ways in:
+ *   Destination — type "Jabalpur", the backend searches the web and returns
+ *     ranked candidate URLs with what is already indexed marked. Review the
+ *     selection, then crawl. This is the automated path.
+ *   URLs — paste links by hand. Unchanged.
+ *
+ * Both converge on the same job: on submit → immediately shows a "queued"
+ * card for every URL.
  * Fires an async job and polls /api/admin/jobs/:id/url-results every 2 s.
  * Each URL card updates independently with its own status, error, chunk count,
  * and elapsed time. Polling stops when all URLs reach a terminal state.
@@ -66,6 +84,11 @@ function statusBadge(status: string) {
 export const KnowledgeBaseCrawler: React.FC<{ onCrawlComplete: () => void }> = ({
   onCrawlComplete,
 }) => {
+  const [mode, setMode] = useState<"destination" | "urls">("destination");
+  const [destination, setDestination] = useState("");
+  const [discovering, setDiscovering] = useState(false);
+  const [discovery, setDiscovery] = useState<DiscoverResponse | null>(null);
+  const [selectedUrls, setSelectedUrls] = useState<Set<string>>(new Set());
   const [urlText, setUrlText] = useState("");
   const [submitting, setSubmitting] = useState(false);
   const [jobId, setJobId] = useState<string | null>(null);
@@ -221,6 +244,24 @@ export const KnowledgeBaseCrawler: React.FC<{ onCrawlComplete: () => void }> = (
       return;
     }
 
+    await launchJob(submittedUrls, () =>
+      submitCrawlUrls(urlText, { asyncMode: true })
+    );
+  };
+
+  /**
+   * Shared job launcher for both modes.
+   *
+   * `submit` differs — pasted URLs go to /api/admin/crawl, a reviewed
+   * destination selection goes to /api/admin/crawl/auto so the destination is
+   * recorded on the job — but everything after it (optimistic cards,
+   * localStorage handoff, polling, error handling) is identical, and the two
+   * modes must not drift into two different progress experiences.
+   */
+  const launchJob = async (
+    submittedUrls: string[],
+    submit: () => Promise<CrawlSubmitResponse>
+  ) => {
     // 1. Immediately show queued cards for every URL
     const now = Date.now();
     setUrlCards(submittedUrls.map((url) => ({
@@ -234,7 +275,7 @@ export const KnowledgeBaseCrawler: React.FC<{ onCrawlComplete: () => void }> = (
 
     try {
       // 2. Fire async job — returns job_id immediately
-      const response = await submitCrawlUrls(urlText, { asyncMode: true });
+      const response = await submit();
 
       if (!response.job_id) {
         // Sync response (backend returned results directly)
@@ -285,6 +326,82 @@ export const KnowledgeBaseCrawler: React.FC<{ onCrawlComplete: () => void }> = (
     }
   };
 
+  /** Search the web for this destination and show the candidates for review. */
+  const handleDiscover = async () => {
+    if (!destination.trim()) return;
+
+    setDiscovering(true);
+    setGlobalError(null);
+    setDiscovery(null);
+    setSelectedUrls(new Set());
+    setUrlCards([]);
+    setJobId(null);
+    setJobStatus(null);
+    stopPolling();
+
+    try {
+      const data = await discoverCandidates(destination.trim());
+      setDiscovery(data);
+      // Pre-select exactly what the automated path would crawl on its own;
+      // the operator edits from there rather than starting from nothing.
+      setSelectedUrls(
+        new Set(data.candidates.filter((c) => c.recommended).map((c) => c.url))
+      );
+
+      if (data.errors.length > 0) {
+        // Partial search coverage is not a failure, but it does mean some
+        // topics are missing — silently showing a short list would read as
+        // "this destination has little coverage".
+        setGlobalError(
+          `${data.errors.length} of ${data.queries.length} searches failed — some topics may be missing. ${data.errors[0]}`
+        );
+      }
+    } catch (err: any) {
+      setGlobalError(
+        err.response?.data?.detail ||
+        err.response?.data?.error ||
+        err.message ||
+        "Discovery failed"
+      );
+    } finally {
+      setDiscovering(false);
+    }
+  };
+
+  /** Crawl the reviewed selection through the same job pipeline as pasted URLs. */
+  const handleCrawlSelected = async () => {
+    if (!discovery || selectedUrls.size === 0) return;
+    const urls = discovery.candidates
+      .map((c) => c.url)
+      .filter((u) => selectedUrls.has(u));
+
+    await launchJob(urls, () =>
+      submitAutoCrawl(discovery.destination, { urls, asyncMode: true })
+    );
+  };
+
+  const toggleCandidate = (url: string) => {
+    setSelectedUrls((prev) => {
+      const next = new Set(prev);
+      if (next.has(url)) next.delete(url);
+      else next.add(url);
+      return next;
+    });
+  };
+
+  const resetAll = () => {
+    stopPolling();
+    setUrlCards([]);
+    setUrlText("");
+    setDestination("");
+    setDiscovery(null);
+    setSelectedUrls(new Set());
+    setGlobalError(null);
+    setJobId(null);
+    setJobStatus(null);
+    setSubmitting(false);
+  };
+
   // Cleanup on unmount
   useEffect(() => () => stopPolling(), [stopPolling]);
 
@@ -316,13 +433,191 @@ export const KnowledgeBaseCrawler: React.FC<{ onCrawlComplete: () => void }> = (
           <Globe size={16} />
         </div>
         <div>
-          <div className="admin-editor-title">Fetch URLs into Knowledge Base</div>
+          <div className="admin-editor-title">Build Knowledge Base</div>
           <div style={{ fontSize: "0.75rem", color: "var(--admin-text-muted)", marginTop: 2 }}>
-            Paste one URL per line — click Submit to fetch and store
+            Name a destination and let it find the sources, or paste URLs yourself
           </div>
         </div>
       </div>
 
+      {/* Mode tabs */}
+      <div style={{ display: "flex", gap: "0.4rem", marginBottom: "1.25rem" }}>
+        {([
+          { id: "destination" as const, label: "By destination", icon: MapPin },
+          { id: "urls" as const, label: "By URL", icon: Link2 },
+        ]).map(({ id, label, icon: Icon }) => (
+          <button
+            key={id}
+            className="admin-btn"
+            onClick={() => { setMode(id); setGlobalError(null); }}
+            disabled={submitting || discovering}
+            style={{
+              padding: "0.45rem 0.9rem",
+              fontSize: "0.8rem",
+              fontWeight: 600,
+              background: mode === id ? "var(--admin-accent-bg)" : "transparent",
+              color: mode === id ? "var(--admin-accent)" : "var(--admin-text-muted)",
+              border: `1px solid ${mode === id ? "var(--admin-accent)" : "var(--admin-border)"}`,
+            }}
+          >
+            <Icon size={13} />
+            {label}
+          </button>
+        ))}
+      </div>
+
+      {mode === "destination" ? (
+        <>
+          {/* Destination input */}
+          <div className="admin-field">
+            <label className="admin-field-label" htmlFor="kb-destination-input">
+              Destination
+            </label>
+            <input
+              id="kb-destination-input"
+              className="admin-input"
+              placeholder="Jabalpur"
+              value={destination}
+              onChange={(e) => setDestination(e.target.value)}
+              onKeyDown={(e) => { if (e.key === "Enter") handleDiscover(); }}
+              disabled={submitting || discovering}
+            />
+            <div style={{ fontSize: "0.72rem", color: "var(--admin-text-muted)", marginTop: 6 }}>
+              Searches the web for travel guides, things to do, how to reach,
+              best time to visit and where to stay — then ranks the results and
+              flags anything already in the knowledge base.
+            </div>
+          </div>
+
+          <div style={{ display: "flex", gap: "0.75rem", alignItems: "center", flexWrap: "wrap" }}>
+            <button
+              className="admin-btn admin-btn-primary"
+              onClick={handleDiscover}
+              disabled={submitting || discovering || !destination.trim()}
+              style={{ padding: "0.6rem 1.4rem" }}
+            >
+              {discovering ? (
+                <>
+                  <Loader2 size={14} style={{ animation: "spin 1s linear infinite" }} />
+                  Searching…
+                </>
+              ) : (
+                <>
+                  <Search size={14} />
+                  Find sources
+                </>
+              )}
+            </button>
+
+            {(discovery || urlCards.length > 0 || globalError) && (
+              <button className="admin-btn admin-btn-secondary" disabled={submitting} onClick={resetAll}>
+                Clear
+              </button>
+            )}
+          </div>
+
+          {/* Candidate review list */}
+          {discovery && (
+            <div style={{ marginTop: "1.5rem" }}>
+              <div style={{
+                display: "flex", gap: "0.6rem", flexWrap: "wrap",
+                alignItems: "center", marginBottom: "0.9rem",
+              }}>
+                <span style={{
+                  fontSize: "0.75rem", fontWeight: 600, padding: "0.25rem 0.7rem",
+                  borderRadius: 9999, background: "var(--admin-accent-bg)", color: "var(--admin-accent)",
+                }}>
+                  {discovery.candidates.length} of {discovery.considered} results kept
+                </span>
+                <span style={{ fontSize: "0.72rem", color: "var(--admin-text-muted)" }}>
+                  {selectedUrls.size} selected · via {discovery.provider}
+                </span>
+              </div>
+
+              {discovery.candidates.length === 0 ? (
+                <div className="admin-toast admin-toast-error">
+                  <AlertTriangle size={14} style={{ flexShrink: 0 }} />
+                  No usable sources found for “{discovery.destination}”. Every
+                  result was filtered out — try the By URL tab.
+                </div>
+              ) : (
+                <div style={{ display: "flex", flexDirection: "column", gap: "0.5rem" }}>
+                  {discovery.candidates.map((c: DiscoveredCandidate) => {
+                    const checked = selectedUrls.has(c.url);
+                    return (
+                      <label
+                        key={c.url}
+                        style={{
+                          display: "flex", gap: "0.7rem", alignItems: "flex-start",
+                          padding: "0.7rem 0.85rem", borderRadius: 10, cursor: "pointer",
+                          border: `1px solid ${checked ? "var(--admin-accent)" : "var(--admin-border)"}`,
+                          background: checked ? "var(--admin-accent-bg)" : "transparent",
+                          animation: "slideIn 0.2s ease",
+                        }}
+                      >
+                        <input
+                          type="checkbox"
+                          checked={checked}
+                          disabled={submitting}
+                          onChange={() => toggleCandidate(c.url)}
+                          style={{ marginTop: 3, flexShrink: 0 }}
+                        />
+                        <div style={{ minWidth: 0, flex: 1 }}>
+                          <div style={{
+                            display: "flex", alignItems: "center", gap: "0.4rem",
+                            flexWrap: "wrap", marginBottom: 2,
+                          }}>
+                            <span style={{ fontSize: "0.85rem", fontWeight: 600 }}>{c.title}</span>
+                            {c.trusted && (
+                              <ShieldCheck size={13} color="var(--admin-green)" aria-label="Trusted source" />
+                            )}
+                          </div>
+                          <div style={{
+                            fontSize: "0.72rem", color: "var(--admin-text-muted)",
+                            overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap",
+                          }}>
+                            {c.url}
+                          </div>
+                          <div style={{
+                            fontSize: "0.7rem", marginTop: 4,
+                            color: c.already_indexed && !c.stale
+                              ? "var(--admin-text-muted)"
+                              : c.recommended ? "var(--admin-green)" : "var(--admin-text-muted)",
+                          }}>
+                            {c.reason} · matched “{c.query}”
+                          </div>
+                        </div>
+                      </label>
+                    );
+                  })}
+                </div>
+              )}
+
+              {discovery.candidates.length > 0 && (
+                <button
+                  className="admin-btn admin-btn-primary"
+                  onClick={handleCrawlSelected}
+                  disabled={submitting || selectedUrls.size === 0}
+                  style={{ padding: "0.6rem 1.4rem", marginTop: "1rem" }}
+                >
+                  {submitting ? (
+                    <>
+                      <Loader2 size={14} style={{ animation: "spin 1s linear infinite" }} />
+                      {jobStatus === "running" ? "Crawling…" : "Queued & waiting…"}
+                    </>
+                  ) : (
+                    <>
+                      <Send size={14} />
+                      Crawl {selectedUrls.size} selected
+                    </>
+                  )}
+                </button>
+              )}
+            </div>
+          )}
+        </>
+      ) : (
+        <>
       {/* URL textarea */}
       <div className="admin-field">
         <label className="admin-field-label" htmlFor="kb-url-input">
@@ -367,23 +662,13 @@ export const KnowledgeBaseCrawler: React.FC<{ onCrawlComplete: () => void }> = (
         </button>
 
         {(urlCards.length > 0 || globalError) && (
-          <button
-            className="admin-btn admin-btn-secondary"
-            disabled={submitting}
-            onClick={() => {
-              stopPolling();
-              setUrlCards([]);
-              setUrlText("");
-              setGlobalError(null);
-              setJobId(null);
-              setJobStatus(null);
-              setSubmitting(false);
-            }}
-          >
+          <button className="admin-btn admin-btn-secondary" disabled={submitting} onClick={resetAll}>
             Clear
           </button>
         )}
       </div>
+      </>
+      )}
 
       {/* Global submission error */}
       {globalError && (

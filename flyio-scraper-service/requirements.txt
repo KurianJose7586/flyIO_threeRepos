@@ -11,6 +11,11 @@ fastapi~=0.141.1
 uvicorn[standard]~=0.52.4
 pydantic-settings~=2.15.0
 python-dotenv~=1.2.3
+# httpx is a runtime dependency, not just a test one: src/discovery/providers.py
+# calls the search API with it from inside the event loop, where `requests`
+# (already present for the legacy crawler) would block every other request for
+# the duration of the search.
+httpx~=0.28.1
 
 # ── Legacy crawler dependencies (from travel_pipeline/requirements.txt) ──────
 # crawl4ai: verified — installed fresh, and confirmed the exact imports
@@ -41,4 +46,5 @@ mwparserfromhell~=0.7.2
 pytest~=9.1.1
 pytest-asyncio~=1.4.0
 pytest-mock~=3.15.1
-httpx~=0.28.1
+# httpx is pinned above — TestClient needs it too, but it is a runtime
+# dependency of the discovery module first.

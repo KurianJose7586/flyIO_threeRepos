@@ -69,7 +69,10 @@ When a request arrives at `POST /api/admin/llm/generate`:
    │
    └── [status: "data_required"]
          → Admin initiates automated source ingestion:
-              a. Extracts/resolves source URLs from prompt, metadata, or DEFAULT_SOURCE_URLS
+              a. Resolves source URLs, in order: request body → URLs in the
+                 prompt text → web search for `destination` if one was given
+                 (POST /scrape/discover, trusted domains only) →
+                 DEFAULT_SOURCE_URLS → all configured tourism sources
               b. Calls Scraper Service (POST /scrape/urls)
               c. Waits for scraper job completion → stores clean chunks in knowledge_base
               d. Converts KB chunks into structured JSON documents
@@ -219,6 +222,8 @@ npm start
 - `DELETE /api/admin/prompts/:request_id` — Delete prompt record and associated event traces.
 
 ### Knowledge Base & Web Scraper
+- `POST /api/admin/discover` — Destination in, ranked candidate URLs out. Crawls nothing; each candidate is marked with whether it is already indexed, stale, or needs review.
+- `POST /api/admin/crawl/auto` — Discover **and** crawl in one call. Pass `urls` to crawl a reviewed selection; omit it to crawl everything discovery recommends. Records the destination on the job.
 - `POST /api/admin/crawl` (or `POST /api/admin/scrape/urls`) — Submit URLs to Scraper Service.
 - `POST /api/admin/scrape/sources` — Scrape default configured tourism sources.
 - `GET /api/admin/jobs/:job_id/status` — Check job status.

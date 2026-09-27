@@ -46,6 +46,64 @@ class ScrapeUrlsRequest(BaseModel):
     job_id: Optional[CallerJobId] = None
 
 
+class DiscoverRequest(BaseModel):
+    destination: str = Field(
+        ...,
+        min_length=2,
+        max_length=120,
+        description=(
+            "Destination name to build a knowledge base for, e.g. 'Jabalpur'. "
+            "Expanded into several topic queries (travel guide, things to do, "
+            "how to reach, best time to visit, where to stay) before searching."
+        ),
+        examples=["Jabalpur"],
+    )
+    max_urls: Optional[int] = Field(
+        None,
+        ge=1,
+        le=50,
+        description=(
+            "Cap on returned candidates. Defaults to DISCOVERY_MAX_URLS. "
+            "Each candidate costs a full page crawl plus one embedding call "
+            "per chunk downstream, so raise this deliberately."
+        ),
+        examples=[12],
+    )
+
+
+class DiscoveredUrl(BaseModel):
+    url: str = Field(..., example="https://en.wikivoyage.org/wiki/Jabalpur", description="Canonical URL, with tracking parameters and fragment removed.")
+    title: str = Field(..., example="Jabalpur – Travel guide at Wikivoyage", description="Page title as reported by the search provider.")
+    domain: str = Field(..., example="wikivoyage.org", description="Registrable domain, 'www.' stripped.")
+    score: int = Field(..., example=100, description="Trust score, 0-100. Higher ranks first; unknown domains score 30.")
+    trusted: bool = Field(
+        ...,
+        example=True,
+        description=(
+            "True when the domain is on the curated trusted list (or is a "
+            ".gov.in/.nic.in tourism board). Consumers should pre-select "
+            "trusted candidates and leave the rest for a human to approve."
+        ),
+    )
+    query: str = Field(..., example="things to do in Jabalpur", description="The expansion query that surfaced this URL.")
+
+
+class DiscoverResponse(BaseModel):
+    destination: str = Field(..., example="Jabalpur", description="Destination that was searched for.")
+    provider: str = Field(..., example="tavily", description="Search backend used ('tavily', 'brave' or 'mock').")
+    queries: List[str] = Field(..., description="The expansion queries that were run.")
+    considered: int = Field(..., example=34, description="Raw search hits seen before filtering — the denominator for 'kept N of M'.")
+    candidates: List[DiscoveredUrl] = Field(..., description="Filtered, ranked and capped URLs, best first.")
+    errors: List[str] = Field(
+        default_factory=list,
+        description=(
+            "Per-query failures. Discovery succeeds on partial results, so a "
+            "non-empty list here means fewer topics are represented than "
+            "requested — surface it rather than treating the result as complete."
+        ),
+    )
+
+
 # ── Health Schemas ────────────────────────────────────────────────────────────
 
 class HealthResponse(BaseModel):

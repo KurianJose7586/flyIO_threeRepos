@@ -5,6 +5,11 @@ POST /scrape/urls
     Body: JSON {"urls": ["https://...", ...]}.
     Creates a job, enqueues a background crawl, returns {job_id} immediately.
 
+POST /scrape/discover
+    Body: JSON {"destination": "Jabalpur", "max_urls": 12}.
+    Searches the web, filters and ranks the hits, returns candidate URLs.
+    Does NOT crawl - the caller decides what to submit to /scrape/urls.
+
 POST /scrape/sources
     Optional query params: max_pages, source_names.
     Crawls all tourism sources from settings (env or legacy config).
@@ -24,8 +29,11 @@ from fastapi import APIRouter, Depends, Header, HTTPException, Query
 from fastapi.security import APIKeyHeader
 
 from src.config.settings import get_settings
+from src.discovery import DiscoveryError, discover
 from src.queue.worker import enqueue
 from src.schemas.models import (
+    DiscoverRequest,
+    DiscoverResponse,
     ErrorResponse,
     JobCreatedResponse,
     JobStatusResponse,
@@ -149,6 +157,135 @@ async def scrape_urls(
         )
     await enqueue(job.job_id, "urls", {"urls": urls})
     return {"job_id": job.job_id}
+
+
+# ── POST /scrape/discover ─────────────────────────────────────────────────────
+
+@router.post(
+    "/scrape/discover",
+    response_model=DiscoverResponse,
+    tags=["Scraping"],
+    summary="Discover Candidate URLs for a Destination",
+    description=(
+        "Expands a destination name into several topic queries, searches the "
+        "web, then filters, scores and caps the hits into a candidate URL list."
+        "\n\n"
+        "**This endpoint does not crawl anything.** It automates the step a "
+        "human currently does by hand — deciding which URLs are worth "
+        "pasting. The caller reviews (or auto-accepts) the candidates and "
+        "submits them to `POST /scrape/urls`, so every page still goes "
+        "through the same crawl, parse and chunk pipeline as before. "
+        "Requires `X-Service-API-Key`."
+    ),
+    responses={
+        200: {
+            "description": "Candidate URLs, best first.",
+            "model": DiscoverResponse,
+            "content": {
+                "application/json": {
+                    "example": {
+                        "destination": "Jabalpur",
+                        "provider": "tavily",
+                        "queries": [
+                            "Jabalpur travel guide",
+                            "things to do in Jabalpur",
+                        ],
+                        "considered": 34,
+                        "candidates": [
+                            {
+                                "url": "https://en.wikivoyage.org/wiki/Jabalpur",
+                                "title": "Jabalpur - Travel guide at Wikivoyage",
+                                "domain": "wikivoyage.org",
+                                "score": 100,
+                                "trusted": True,
+                                "query": "Jabalpur travel guide",
+                            }
+                        ],
+                        "errors": [],
+                    }
+                }
+            },
+        },
+        400: {
+            "description": "Unusable destination, or no search provider configured.",
+            "model": ErrorResponse,
+            "content": {
+                "application/json": {
+                    "example": {
+                        "detail": (
+                            "SEARCH_API_KEY is empty but SEARCH_PROVIDER is "
+                            "'tavily'. Get a key at https://app.tavily.com or "
+                            "set SEARCH_PROVIDER=mock."
+                        )
+                    }
+                }
+            },
+        },
+        401: {
+            "description": "Missing or invalid X-Service-API-Key header.",
+            "model": ErrorResponse,
+            "content": {
+                "application/json": {
+                    "example": {"detail": "Missing X-Service-API-Key header."}
+                }
+            },
+        },
+        502: {
+            "description": "The search provider was reached but every query failed.",
+            "model": ErrorResponse,
+            "content": {
+                "application/json": {
+                    "example": {
+                        "detail": "All 5 search queries failed. First error - 'Jabalpur travel guide': HTTPStatusError: 429"
+                    }
+                }
+            },
+        },
+    },
+)
+async def discover_urls(
+    body: DiscoverRequest,
+    x_service_api_key: ApiKeyHeader,
+):
+    """
+    Search for pages worth crawling for a destination.
+
+    Returns candidates only — nothing is crawled and nothing is stored.
+
+    Deduplication against an already-populated knowledge base is deliberately
+    the caller's job: this service is stateless and has no view of what has
+    been ingested. flyio-admin owns that in its `knowledge_base` table and
+    marks the candidates it already holds.
+    """
+    settings = get_settings()
+
+    try:
+        result = await discover(body.destination, body.max_urls)
+    except DiscoveryError as exc:
+        # A bad destination or an unconfigured provider is the caller's to fix
+        # (400); an upstream that took the request and then failed is not
+        # (502). Either way the message carries the remedy.
+        status = 502 if "search queries failed" in str(exc) else 400
+        raise HTTPException(status_code=status, detail=str(exc))
+
+    return {
+        "destination": result.destination,
+        "provider": settings.SEARCH_PROVIDER,
+        "queries": result.queries,
+        "considered": result.considered,
+        "candidates": [
+            {
+                "url": c.url,
+                "title": c.title,
+                "domain": c.domain,
+                "score": c.score,
+                "trusted": c.trusted,
+                "query": c.query,
+            }
+            for c in result.candidates
+        ],
+        "errors": result.errors,
+    }
 
 
 # ── POST /scrape/sources ──────────────────────────────────────────────────────
