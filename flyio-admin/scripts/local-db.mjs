@@ -49,7 +49,12 @@ function readTarget() {
   };
 }
 
-/** Resolves true if the admin's own credentials can open its database. */
+/**
+ * Resolves true if the admin's own credentials can open its database and it
+ * stores UTF-8. A database in any other encoding cannot hold the text the
+ * admin stores (Hindi, Tamil, … on Indian travel pages), so it counts as not
+ * ready: the admin must not start against it before ensureUtf8 replaces it.
+ */
 async function canConnect(t, database = t.database) {
   const client = new pg.Client({
     host: t.host, port: t.port, user: t.user, password: t.password, database,
@@ -57,12 +62,65 @@ async function canConnect(t, database = t.database) {
   });
   try {
     await client.connect();
+    const { rows } = await client.query("SHOW server_encoding");
+    if (rows[0].server_encoding !== "UTF8") {
+      canConnect.lastError = new Error(`database ${database} uses ${rows[0].server_encoding}, not UTF8`);
+      return false;
+    }
     return true;
   } catch (err) {
     canConnect.lastError = err;
     return false;
   } finally {
     await client.end().catch(() => {});
+  }
+}
+
+// initdb takes its encoding from the OS locale unless told otherwise. On
+// Windows that is typically WIN1252, and every page with Indic text then
+// fails to save: 'character with byte sequence 0xe0 0xa4 0x9c in encoding
+// "UTF8" has no equivalent in encoding "WIN1252"'.
+const UTF8_DATABASE = `ENCODING 'UTF8' LC_COLLATE 'C' LC_CTYPE 'C' TEMPLATE template0`;
+
+/**
+ * Creates the admin's database as UTF-8, or - when an earlier version of this
+ * script created it in the OS encoding - renames that one aside and creates
+ * a UTF-8 one in its place. The admin re-runs its migrations and re-creates
+ * its first account from .env at startup, so the new database needs nothing
+ * else. The old one is kept, only renamed.
+ */
+async function ensureUtf8Database(admin, t) {
+  const quote = (name) => `"${name.replace(/"/g, '""')}"`;
+  const existing = await admin.query(
+    "SELECT pg_encoding_to_char(encoding) AS enc FROM pg_database WHERE datname = $1",
+    [t.database]
+  );
+  if (existing.rowCount > 0 && existing.rows[0].enc === "UTF8") return;
+
+  if (existing.rowCount > 0) {
+    const stamp = new Date().toISOString().slice(0, 19).replace(/[-:T]/g, "");
+    const aside = `${t.database}_${existing.rows[0].enc.toLowerCase()}_${stamp}`;
+    await admin.query(
+      "SELECT pg_terminate_backend(pid) FROM pg_stat_activity WHERE datname = $1 AND pid <> pg_backend_pid()",
+      [t.database]
+    );
+    await admin.query(`ALTER DATABASE ${quote(t.database)} RENAME TO ${quote(aside)}`);
+    console.log(
+      `[local-db] database ${t.database} used ${existing.rows[0].enc}, which cannot store non-Latin text; ` +
+        `kept it as ${aside} and created a new UTF-8 ${t.database}.`
+    );
+  }
+  await admin.query(`CREATE DATABASE ${quote(t.database)} ${UTF8_DATABASE}`);
+  if (existing.rowCount === 0) console.log(`[local-db] created database ${t.database}`);
+}
+
+async function withServerAdmin(t, fn) {
+  const admin = new pg.Client({ host: t.host, port: t.port, user: t.user, password: t.password, database: "postgres" });
+  await admin.connect();
+  try {
+    return await fn(admin);
+  } finally {
+    await admin.end().catch(() => {});
   }
 }
 
@@ -111,6 +169,14 @@ async function main() {
     console.log(`[local-db] a database is already running at ${where}; using it.`);
     return 0;
   }
+  // Running, but the database is missing or not UTF-8: fix it in place.
+  try {
+    await withServerAdmin(t, (admin) => ensureUtf8Database(admin, t));
+    console.log(`[local-db] a database is already running at ${where}; using it.`);
+    return 0;
+  } catch {
+    // Nothing usable answered; start our own below.
+  }
 
   const isRootOnPosix = typeof process.getuid === "function" && process.getuid() === 0;
   const server = new EmbeddedPostgres({
@@ -120,6 +186,7 @@ async function main() {
     password: t.password,
     authMethod: "scram-sha-256",
     persistent: true,
+    initdbFlags: ["--encoding=UTF8", "--no-locale"],
     // Postgres refuses to run as root; only relevant in Linux containers.
     createPostgresUser: isRootOnPosix,
     onLog: () => {},
@@ -140,22 +207,18 @@ async function main() {
 
   await server.start();
 
-  const admin = new pg.Client({ host: t.host, port: t.port, user: t.user, password: t.password, database: "postgres" });
   try {
-    await admin.connect();
+    await withServerAdmin(t, (admin) => ensureUtf8Database(admin, t));
   } catch (err) {
     await server.stop().catch(() => {});
-    throw new Error(
-      `the database in ${dataDir} rejected the credentials in flyio-admin/.env (${err.message}). ` +
-        "It was created with different ones: restore them, or delete that folder to start empty."
-    );
+    if (/password|authentication/i.test(err.message)) {
+      throw new Error(
+        `the database in ${dataDir} rejected the credentials in flyio-admin/.env (${err.message}). ` +
+          "It was created with different ones: restore them, or delete that folder to start empty."
+      );
+    }
+    throw err;
   }
-  const exists = await admin.query("SELECT 1 FROM pg_database WHERE datname = $1", [t.database]);
-  if (exists.rowCount === 0) {
-    await admin.query(`CREATE DATABASE "${t.database.replace(/"/g, '""')}"`);
-    console.log(`[local-db] created database ${t.database}`);
-  }
-  await admin.end();
 
   console.log(`[local-db] PostgreSQL 16 ready at ${where}. Ctrl+C to stop.`);
 
