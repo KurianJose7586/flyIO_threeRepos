@@ -1,11 +1,12 @@
 <#
 .SYNOPSIS
-  Starts all four FlyIO processes.
+  Starts the FlyIO services and the admin's local database.
 
 .DESCRIPTION
   Paths are relative to this script, so it runs the services in this
   repository wherever it is cloned. Run setup.ps1 once first.
 
+    admin database          PostgreSQL from flyio-admin/.env (local only)
     flyio-ai-llm            http://localhost:8000
     flyio-scraper-service   http://localhost:8080
     flyio-admin (API)       port from flyio-admin/.env (PORT, default 3000)
@@ -40,11 +41,15 @@ if ($OneWindow) {
     if ($NotWindows) { $venvPy = ".venv/bin/python"; $frontend = "flyio-admin/frontend" }
     else { $venvPy = ".venv\Scripts\python.exe"; $frontend = "flyio-admin\frontend" }
 
-    $names = "llm,scraper,admin,web"
+    # The admin exits at startup if its database is not accepting
+    # connections yet, so it waits for it (local-db.mjs --wait returns at
+    # once when .env points at a remote database).
+    $names = "db,llm,scraper,admin,web"
     $commands = @(
+        "cd flyio-admin && node scripts/local-db.mjs",
         "cd flyio-ai-llm && $venvPy -m uvicorn app.main:app --host 0.0.0.0 --port 8000 --reload",
         "cd flyio-scraper-service && $venvPy -m uvicorn src.main:app --host 0.0.0.0 --port 8080 --reload",
-        "cd flyio-admin && npm run dev",
+        "cd flyio-admin && node scripts/local-db.mjs --wait && npm run dev",
         "cd $frontend && npm run dev"
     )
     $concurrently = Join-Path (Join-Path (Join-Path (Join-Path $Root "flyio-admin") "node_modules") "concurrently") (Join-Path "dist" (Join-Path "bin" "index.js"))
@@ -62,7 +67,7 @@ if ($OneWindow) {
     Write-Host ""
     Push-Location -LiteralPath $Root
     try {
-        & node $concurrently --names $names --prefix-colors "magenta,cyan,green,yellow" @commands
+        & node $concurrently --names $names --prefix-colors "blue,magenta,cyan,green,yellow" @commands
     } finally {
         Pop-Location
     }
@@ -90,6 +95,9 @@ function Start-ServiceWindow([string]$Title, [string]$Dir, [string]$Command) {
 
 $venvSetup = "if (!(Test-Path .venv)) { python -m venv .venv }; .\.venv\Scripts\activate; pip install -r requirements.txt"
 
+Start-ServiceWindow "flyio-admin database" (Join-Path $Root "flyio-admin") `
+    "node scripts/local-db.mjs"
+
 Start-ServiceWindow "flyio-ai-llm" (Join-Path $Root "flyio-ai-llm") `
     "$venvSetup; uvicorn app.main:app --host 0.0.0.0 --port 8000 --reload"
 
@@ -97,14 +105,14 @@ Start-ServiceWindow "flyio-scraper-service" (Join-Path $Root "flyio-scraper-serv
     "$venvSetup; uvicorn src.main:app --host 0.0.0.0 --port 8080 --reload"
 
 Start-ServiceWindow "flyio-admin" (Join-Path $Root "flyio-admin") `
-    "npm install; npm run dev"
+    "node scripts/local-db.mjs --wait; npm install; npm run dev"
 
 Start-ServiceWindow "flyio-admin frontend" (Join-Path (Join-Path $Root "flyio-admin") "frontend") `
     "npm install; npm run dev"
 
 if (-not $DryRun) {
     Write-Host ""
-    Write-Host "All services started in separate windows."
+    Write-Host "All services started in separate windows (the database first)."
     Write-Host "If a window shows 'error 2147942632 (0x800700e8)', close them all and run:"
     Write-Host "    .\run_all.ps1 -OneWindow"
     Write-Host "Open http://localhost:5173 -> Knowledge Base -> By destination"

@@ -26,6 +26,9 @@ script:
 - sets destination search to **Wikimedia** — free, no API key: it searches
   Wikivoyage and Wikipedia;
 - points the admin at the local scraper and makes their API keys match;
+- gives the admin a database: if `flyio-admin/.env` names none, it is set to
+  a local PostgreSQL 16 that `run_all.ps1` starts — bundled through npm, so
+  nothing to install;
 - flags any setting that still needs a real value;
 - finishes with a live search for "Jabalpur" to prove search works.
 
@@ -38,7 +41,10 @@ It is safe to re-run. Any `.env` it changes is backed up as
 powershell -ExecutionPolicy Bypass -File .\run_all.ps1
 ```
 
-Four windows open, a couple of seconds apart. Then go to
+Five windows open, a couple of seconds apart — the admin's database first
+(when `flyio-admin/.env` points at a local one), then the four services; the
+admin waits until the database is ready. Its data is kept in
+`flyio-admin/.local-db`, so it survives restarts. Then go to
 **http://localhost:5173 → Knowledge Base → By destination**, type a
 destination and click **Find sources**.
 

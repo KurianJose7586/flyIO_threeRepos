@@ -277,8 +277,31 @@ if ($adminPort -and $adminPort -ne "3000") {
 foreach ($key in @("CMS_JWT_SECRET", "INITIAL_ADMIN_PASSWORD")) {
     if (Test-Placeholder (Read-EnvValue $AdminEnv $key)) { Add-Warning "flyio-admin/.env: $key is empty or a placeholder" }
 }
-if ((Test-Placeholder (Read-EnvValue $AdminEnv "DATABASE_URL")) -and (Test-Placeholder (Read-EnvValue $AdminEnv "PGHOST"))) {
-    Add-Warning "flyio-admin/.env: set DATABASE_URL or PGHOST/PGUSER/PGPASSWORD/PGDATABASE - the admin will not start without a database"
+# The admin needs PostgreSQL. With none configured, point it at the local one
+# run_all.ps1 starts (flyio-admin/scripts/local-db.mjs): it creates itself
+# from these settings on first start, so there is nothing to install.
+$dbUrl = Read-EnvValue $AdminEnv "DATABASE_URL"
+if ((Test-Placeholder $dbUrl) -and (Test-Placeholder (Read-EnvValue $AdminEnv "PGHOST"))) {
+    if ($dbUrl) { Set-EnvValue $AdminEnv "DATABASE_URL" "" "placeholder removed; using the local database" }
+    Set-EnvValue $AdminEnv "PGHOST" "127.0.0.1" "local database, started by run_all.ps1"
+    Set-EnvValue $AdminEnv "PGPORT" "55432" "local database"
+    Set-EnvValue $AdminEnv "PGUSER" "flyio" "local database"
+    Set-EnvValue $AdminEnv "PGPASSWORD" ([guid]::NewGuid().ToString("N")) "generated for the local database"
+    Set-EnvValue $AdminEnv "PGDATABASE" "flyio_admin" "local database"
+}
+$dbUrl = Read-EnvValue $AdminEnv "DATABASE_URL"
+if ($dbUrl) {
+    $dbHost = ([uri]$dbUrl).Host
+} else {
+    $dbHost = Read-EnvValue $AdminEnv "PGHOST"
+    foreach ($key in @("PGUSER", "PGDATABASE")) {
+        if (Test-Placeholder (Read-EnvValue $AdminEnv $key)) { Add-Warning "flyio-admin/.env: $key is empty or a placeholder - the admin cannot open its database" }
+    }
+}
+if ($dbHost -match '^(localhost|127\.0\.0\.1|::1|\[::1\])$') {
+    Write-Ok "admin database is local ($dbHost) - run_all.ps1 starts it; data in flyio-admin/.local-db"
+} else {
+    Write-Ok "admin database at $dbHost (not started by run_all.ps1)"
 }
 
 # -- 5. Live discovery check -------------------------------------------------
