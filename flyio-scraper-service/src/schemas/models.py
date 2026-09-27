@@ -90,7 +90,7 @@ class DiscoveredUrl(BaseModel):
 
 class DiscoverResponse(BaseModel):
     destination: str = Field(..., example="Jabalpur", description="Destination that was searched for.")
-    provider: str = Field(..., example="tavily", description="Search backend used ('tavily', 'brave' or 'mock').")
+    provider: str = Field(..., example="wikimedia+duckduckgo", description="Search backend(s) used, '+'-joined when several are combined.")
     queries: List[str] = Field(..., description="The expansion queries that were run.")
     considered: int = Field(..., example=34, description="Raw search hits seen before filtering — the denominator for 'kept N of M'.")
     candidates: List[DiscoveredUrl] = Field(..., description="Filtered, ranked and capped URLs, best first.")

@@ -185,7 +185,7 @@ async def scrape_urls(
                 "application/json": {
                     "example": {
                         "destination": "Jabalpur",
-                        "provider": "tavily",
+                        "provider": "wikimedia+duckduckgo",
                         "queries": [
                             "Jabalpur travel guide",
                             "things to do in Jabalpur",
@@ -257,8 +257,6 @@ async def discover_urls(
     been ingested. flyio-admin owns that in its `knowledge_base` table and
     marks the candidates it already holds.
     """
-    settings = get_settings()
-
     try:
         result = await discover(body.destination, body.max_urls)
     except DiscoveryError as exc:
@@ -270,7 +268,7 @@ async def discover_urls(
 
     return {
         "destination": result.destination,
-        "provider": settings.SEARCH_PROVIDER,
+        "provider": result.provider,
         "queries": result.queries,
         "considered": result.considered,
         "candidates": [

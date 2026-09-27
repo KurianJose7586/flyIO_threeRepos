@@ -10,6 +10,8 @@ from fastapi.testclient import TestClient
 # default), and get_settings() is process-wide lru_cached, so this must
 # happen before the first import of src.config.settings anywhere.
 os.environ["SERVICE_API_KEY"] = "test_service_api_key"
+# The production default (wikimedia) makes real network calls; tests never do.
+os.environ["SEARCH_PROVIDER"] = "mock"
 
 TEST_SERVICE_API_KEY = os.environ["SERVICE_API_KEY"]
 

@@ -40,12 +40,22 @@ class Settings(BaseSettings):
     RESPECT_ROBOTS_TXT: bool = True
 
     # ── Discovery (destination -> candidate URLs) ─────────────────────────────
-    # Used only by POST /scrape/discover. Defaults are deliberately safe: the
-    # mock provider needs no key and no network, so the endpoint works (and is
-    # testable) on a deployment that has not signed up for a search API yet.
-    # Switch to "tavily" or "brave" and set SEARCH_API_KEY for real results.
-    SEARCH_PROVIDER: str = "mock"
+    # Used only by POST /scrape/discover. One provider, or several
+    # comma-separated whose results are merged:
+    #   wikimedia   free, no key — Wikivoyage + Wikipedia search API (default)
+    #   duckduckgo  free, no key — web-wide, unofficial, can throttle
+    #   searxng     free — web-wide via your own SearXNG (set SEARXNG_URL)
+    #   tavily, brave  paid — need SEARCH_API_KEY
+    #   mock        offline synthetic results, for tests only
+    # Recommended: "wikimedia,duckduckgo" — reliable core plus web breadth.
+    SEARCH_PROVIDER: str = "wikimedia"
     SEARCH_API_KEY: str = ""
+    SEARXNG_URL: str = ""
+    # Wikimedia refuses anonymous-looking clients; see its User-Agent policy.
+    # Adding a contact (URL or email) in parentheses is requested there.
+    SEARCH_USER_AGENT: str = "flyio-scraper-service/1.0 (travel destination discovery)"
+    # Region hint for duckduckgo ("in-en" = India, English).
+    SEARCH_REGION: str = "in-en"
 
     # How many hits to request per expansion query. Five queries at 5 hits is
     # 25 raw candidates to filter down from — enough spread that the per-domain

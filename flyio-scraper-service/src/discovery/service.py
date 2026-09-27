@@ -30,6 +30,8 @@ class DiscoveryResult:
     'kept 8 of 34', which is the number that tells an operator whether the
     filters are too tight or too loose."""
     errors: list[str]
+    provider: str = ""
+    """Name of the provider(s) actually used, e.g. "wikimedia+duckduckgo"."""
 
 
 async def discover(destination: str, max_urls: int | None = None) -> DiscoveryResult:
@@ -46,7 +48,13 @@ async def discover(destination: str, max_urls: int | None = None) -> DiscoveryRe
         raise DiscoveryError(str(exc)) from exc
 
     try:
-        provider = get_provider(settings.SEARCH_PROVIDER, settings.SEARCH_API_KEY)
+        provider = get_provider(
+            settings.SEARCH_PROVIDER,
+            settings.SEARCH_API_KEY,
+            searxng_url=settings.SEARXNG_URL,
+            user_agent=settings.SEARCH_USER_AGENT,
+            region=settings.SEARCH_REGION,
+        )
     except SearchError as exc:
         raise DiscoveryError(str(exc)) from exc
 
@@ -64,6 +72,10 @@ async def discover(destination: str, max_urls: int | None = None) -> DiscoveryRe
             f"All {len(queries)} search queries failed. First error — {errors[0]}"
         )
 
+    # With several providers, one failing is not a failed query — but it
+    # does mean thinner coverage, so it is reported like one.
+    errors = errors + getattr(provider, "partial_errors", [])
+
     candidates = build_candidates(hits, extra_denied=settings.get_denied_domains())
     capped = cap_candidates(
         candidates, budget, settings.DISCOVERY_MAX_PER_DOMAIN
@@ -75,4 +87,5 @@ async def discover(destination: str, max_urls: int | None = None) -> DiscoveryRe
         candidates=capped,
         considered=len(hits),
         errors=errors,
+        provider=provider.name,
     )

@@ -294,8 +294,13 @@ How it works:
    things to do, how to reach, best time to visit, where to stay), so the
    result covers the same sections the chunker produces rather than five
    copies of one listicle.
-2. **Search** — queries run concurrently against the configured provider.
-   A single failing query is reported in `errors` and does not abort the rest.
+2. **Search** — queries run concurrently against the configured provider(s).
+   A failing query, or one provider failing when several are combined, is
+   reported in `errors` and does not abort the rest. `wikimedia` searches
+   each wiki once for the destination name rather than per topic query.
+
+   Try it live without starting anything:
+   `python scripts/try_discovery.py Jabalpur --provider wikimedia,duckduckgo`
 3. **Filter** — non-`http(s)` URLs, non-document extensions and denied
    domains (Pinterest, Quora, Reddit, social, OTA booking funnels) are dropped.
 4. **Score** — Wikivoyage/Wikipedia and government tourism boards rank
@@ -319,7 +324,7 @@ How it works:
 ```json
 {
   "destination": "Jabalpur",
-  "provider": "tavily",
+  "provider": "wikimedia+duckduckgo",
   "queries": ["Jabalpur travel guide", "things to do in Jabalpur"],
   "considered": 34,
   "candidates": [
@@ -370,8 +375,11 @@ How it works:
 | `REQUEST_DELAY_SECONDS` | `2.0` | Base delay between successive requests to polite sources. |
 | `REQUEST_DELAY_JITTER` | `1.0` | Random jitter added to delays. |
 | `RESPECT_ROBOTS_TXT` | `true` | Whether to parse and respect `robots.txt`. |
-| `SEARCH_PROVIDER` | `mock` | Search backend for discovery: `tavily`, `brave`, or `mock` (offline, synthetic — **not for production**). |
-| `SEARCH_API_KEY` | `""` | API key for the chosen provider. Unused by `mock`. |
+| `SEARCH_PROVIDER` | `wikimedia` | Search backend(s) for discovery, comma-separated to combine. **Free, no key:** `wikimedia` (Wikivoyage + Wikipedia API), `duckduckgo` (web-wide, unofficial, can throttle), `searxng` (web-wide, self-hosted). **Paid:** `tavily`, `brave`. **Tests:** `mock`. Recommended: `wikimedia,duckduckgo`. |
+| `SEARCH_API_KEY` | `""` | API key for `tavily` or `brave`. Unused by the free providers. |
+| `SEARXNG_URL` | `""` | Base URL of your SearXNG instance, when `searxng` is used. |
+| `SEARCH_USER_AGENT` | `flyio-scraper-service/1.0 (…)` | Sent to Wikimedia, which refuses anonymous clients. Add a contact URL if you can. |
+| `SEARCH_REGION` | `in-en` | Region hint for `duckduckgo`. |
 | `DISCOVERY_RESULTS_PER_QUERY` | `5` | Hits requested per expansion query (5 queries per destination). |
 | `DISCOVERY_MAX_URLS` | `12` | Hard ceiling on candidates returned for one destination. |
 | `DISCOVERY_MAX_PER_DOMAIN` | `3` | Max candidates from any one site, preserving topic spread. |

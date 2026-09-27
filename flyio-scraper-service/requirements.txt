@@ -16,6 +16,9 @@ python-dotenv~=1.2.3
 # (already present for the legacy crawler) would block every other request for
 # the duration of the search.
 httpx~=0.28.1
+# Free web search for SEARCH_PROVIDER=duckduckgo (no API key). Unofficial —
+# see src/discovery/providers.py.
+ddgs~=9.16.0
 
 # ── Legacy crawler dependencies (from travel_pipeline/requirements.txt) ──────
 # crawl4ai: verified — installed fresh, and confirmed the exact imports
