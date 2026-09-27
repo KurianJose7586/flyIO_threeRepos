@@ -39,6 +39,7 @@ type UrlCardState = {
   /** Chunks that reached Qdrant — see JobUrlResult.vector_chunks. */
   vector_chunks?: number;
   vector_status?: "stored" | "partial" | "failed" | "pending" | null;
+  vector_error?: string | null;
   error: string | null;
   duration_ms: number | null;
   startedAt: number; // local timestamp when card was shown (for live timer)
@@ -156,6 +157,7 @@ export const KnowledgeBaseCrawler: React.FC<{ onCrawlComplete: () => void }> = (
               chunks: resolved.chunks,
               vector_chunks: resolved.vector_chunks,
               vector_status: resolved.vector_status,
+              vector_error: resolved.vector_error,
               error: resolved.error,
               duration_ms: resolved.duration_ms,
             };
@@ -301,6 +303,7 @@ export const KnowledgeBaseCrawler: React.FC<{ onCrawlComplete: () => void }> = (
             chunks: r.chunks ?? 0,
             vector_chunks: r.vector_stored,
             vector_status: r.vector_status === "skipped" ? "failed" : r.vector_status,
+            vector_error: r.vector_error ?? null,
             error: r.error ?? null,
             duration_ms: null,
             startedAt: now,
@@ -867,6 +870,19 @@ export const KnowledgeBaseCrawler: React.FC<{ onCrawlComplete: () => void }> = (
                       borderRadius: 6, wordBreak: "break-word",
                     }}>
                       {card.error}
+                    </div>
+                  )}
+
+                  {/* Scraped fine, but the chunks did not reach Qdrant — say why. */}
+                  {isSuccess && card.vector_error &&
+                    (card.vector_status === "failed" || card.vector_status === "partial") && (
+                    <div style={{
+                      marginTop: "0.4rem", fontSize: "0.73rem",
+                      color: "var(--admin-red)", fontFamily: "monospace",
+                      background: "var(--admin-red-bg)", padding: "0.35rem 0.6rem",
+                      borderRadius: 6, wordBreak: "break-word",
+                    }}>
+                      Vector DB: {card.vector_error}
                     </div>
                   )}
                 </div>

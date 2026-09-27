@@ -351,6 +351,8 @@ export interface JobUrlResult {
   /** How many of `chunks` carry a Qdrant point ID, i.e. reached the vector DB. */
   vector_chunks?: number;
   vector_status?: "stored" | "partial" | "failed" | "pending" | null;
+  /** Why chunks did not reach the vector DB, when they did not. */
+  vector_error?: string | null;
   error: string | null;
   duration_ms: number | null;
 }

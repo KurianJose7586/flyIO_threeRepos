@@ -40,9 +40,14 @@ Splitting them (rather than one lazy import of all four together) means:
 See docs/TESTING.md.
 """
 import asyncio
+import logging
 import sys
 import os
 import warnings
+
+from src.crawler.wikimedia_fetch import WikiPageMissing, fetch_wiki_page, wiki_article_title
+
+logger = logging.getLogger(__name__)
 
 # Suppress a benign BeautifulSoup warning that fires when a URL string
 # accidentally gets fed to the HTML parser during title-tag cleaning in
@@ -120,9 +125,14 @@ async def run_crawl_source(source_cfg: dict) -> list[dict]:
         pages = await loop.run_in_executor(None, _crawl_crawl4ai_source, source_cfg)
 
     # ── Step 2: Parse + chunk each page ──────────────────────────────────────
+    return await _parse_and_chunk(pages)
+
+
+async def _parse_and_chunk(pages: list[dict]) -> list[dict]:
     # parse_page and chunk_page are both synchronous — offload to thread pool.
     # chunk_page natively returns the exact chunk schema we want:
     #   {source_url, page_title, section_path, chunk_index, content_text, content_html}
+    loop = asyncio.get_event_loop()
     all_chunks: list[dict] = []
     for page in pages:
         parsed = await loop.run_in_executor(
@@ -157,11 +167,36 @@ async def run_crawl_urls(urls: list[str]) -> list[dict]:
     if not urls:
         return []
 
-    source_cfg = {
-        "name": "custom_urls",
-        "strategy": "crawl4ai",
-        "start_urls": urls,
-        "allowed_domain": None,  # no domain fence — crawl each URL as-is
-        "max_pages": len(urls),
-    }
-    return await run_crawl_source(source_cfg)
+    # Wikivoyage/Wikipedia articles come from the MediaWiki API; a browser is
+    # only used for them if the API itself cannot be reached.
+    loop = asyncio.get_event_loop()
+    pages: list[dict] = []
+    browser_urls: list[str] = []
+    for url in urls:
+        if wiki_article_title(url) is None:
+            browser_urls.append(url)
+            continue
+        try:
+            pages.append(await loop.run_in_executor(None, _fetch_wiki_page, url))
+        except WikiPageMissing as exc:
+            logger.warning("Wiki article not found, skipping %s: %s", url, exc)
+        except Exception as exc:
+            logger.warning("MediaWiki API fetch failed for %s (%s); trying the browser", url, exc)
+            browser_urls.append(url)
+
+    if browser_urls:
+        source_cfg = {
+            "name": "custom_urls",
+            "strategy": "crawl4ai",
+            "start_urls": browser_urls,
+            "allowed_domain": None,  # no domain fence — crawl each URL as-is
+            "max_pages": len(browser_urls),
+        }
+        pages.extend(await loop.run_in_executor(None, _crawl_crawl4ai_source, source_cfg))
+
+    return await _parse_and_chunk(pages)
+
+
+def _fetch_wiki_page(url: str) -> dict:
+    from src.config.settings import get_settings
+    return fetch_wiki_page(url, get_settings().SEARCH_USER_AGENT)

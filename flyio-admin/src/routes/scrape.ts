@@ -407,6 +407,25 @@ router.get(
         ingestedMap.set(row.source_url, parseInt(row.ingested, 10));
       }
 
+      // Why a URL's chunks did not reach the vector DB, as logged by
+      // ingestScrapedUrls. The latest event per URL wins, so a successful
+      // retry clears an earlier failure.
+      const vectorEvents = await query(
+        `SELECT DISTINCT ON (detail->>'url') detail->>'url' AS url, event_type,
+                COALESCE(detail->>'error', detail->>'reason') AS reason
+         FROM job_events
+         WHERE job_id = $1
+           AND event_type IN ('vector_ingested', 'vector_ingest_failed', 'vector_ingest_skipped')
+         ORDER BY detail->>'url', id DESC`,
+        [job_id]
+      );
+      const vectorErrorMap = new Map<string, string>();
+      for (const row of vectorEvents.rows) {
+        if (row.event_type !== "vector_ingested" && row.reason) {
+          vectorErrorMap.set(row.url, row.reason);
+        }
+      }
+
       // Build per-URL results from history
       const urlResults = historyResult.rows.map((h) => {
         const chunks = chunkMap.get(h.url) || 0;
@@ -435,6 +454,7 @@ router.get(
                   : jobStatus === "success" || jobStatus === "failed"
                     ? "failed"
                     : "pending",
+          vector_error: ingested >= chunks ? null : vectorErrorMap.get(h.url) ?? null,
           error: h.error_message || null,
           duration_ms: h.duration_ms ?? null,
         };

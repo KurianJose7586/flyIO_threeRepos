@@ -170,6 +170,14 @@ export async function storeDocuments(
         `LLM Store API responded ${err.response.status}: ${body?.slice(0, 1500)}`
       );
     }
+    // No response at all: the LLM service is down or LLM_SERVICE_URL is wrong.
+    // Axios reports that as a bare "connect ECONNREFUSED 127.0.0.1:8000".
+    if (axios.isAxiosError(err) && !err.response) {
+      throw new Error(
+        `LLM service not reachable at ${env.LLM_SERVICE_URL} (${err.code || err.message}). ` +
+          "Is flyio-ai-llm running, and is LLM_SERVICE_URL in flyio-admin/.env right?"
+      );
+    }
     throw err;
   }
 }

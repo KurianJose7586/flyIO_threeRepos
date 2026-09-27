@@ -193,6 +193,12 @@ DEFAULT_USER_AGENT = (
 )
 
 
+# Characters MediaWiki leaves unescaped in article URLs, so a title such as
+# "Kochi (Shikoku)" links as /wiki/Kochi_(Shikoku) - the form its own pages use
+# and people paste - rather than /wiki/Kochi_%28Shikoku%29.
+_TITLE_SAFE = "/:;@$!*(),~"
+
+
 class WikimediaProvider:
     """Wikivoyage + Wikipedia via the MediaWiki search API — free, no key.
 
@@ -248,12 +254,32 @@ class WikimediaProvider:
                 ),
                 return_exceptions=True,
             )
-        hits = [h for r in results if not isinstance(r, BaseException) for h in r]
+        hits = [
+            h
+            for r in results
+            if not isinstance(r, BaseException)
+            for h in self._drop_homonyms(r, term)
+        ]
         if not hits:
             failures = [r for r in results if isinstance(r, BaseException)]
             if failures:
                 raise failures[0]
         return hits
+
+    @staticmethod
+    def _drop_homonyms(hits: list[dict], term: str) -> list[dict]:
+        """Drop other places that share the destination's name.
+
+        Wikis name same-named places "Kochi (Shikoku)", "Kochi (prefecture)".
+        When the plain "Kochi" article is among the hits it is the one meant,
+        so qualified homonyms of it are noise; without it there is no telling
+        which one was meant, and all of them are kept.
+        """
+        key = term.strip().casefold()
+        if not any(h["title"].strip().casefold() == key for h in hits):
+            return hits
+        prefix = key + " ("
+        return [h for h in hits if not h["title"].strip().casefold().startswith(prefix)]
 
     @staticmethod
     async def _search_site(client: httpx.AsyncClient, site: str, term: str, limit: int) -> list[dict]:
@@ -272,7 +298,7 @@ class WikimediaProvider:
         resp.raise_for_status()
         return [
             {
-                "url": f"https://{site}/wiki/{quote(hit['title'].replace(' ', '_'))}",
+                "url": f"https://{site}/wiki/{quote(hit['title'].replace(' ', '_'), safe=_TITLE_SAFE)}",
                 "title": hit["title"],
             }
             for hit in resp.json().get("query", {}).get("search", [])

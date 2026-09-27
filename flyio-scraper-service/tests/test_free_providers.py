@@ -84,6 +84,41 @@ async def test_wikimedia_percent_encodes_non_ascii_titles():
 
 
 @pytest.mark.asyncio
+async def test_wikimedia_keeps_parentheses_in_urls():
+    """Wikis link "Kochi (Shikoku)" as /wiki/Kochi_(Shikoku), not %28…%29."""
+    def handler(request):
+        return httpx.Response(200, json=_wiki_search("Kochi (Shikoku)"))
+
+    hits = await WikimediaProvider(transport=httpx.MockTransport(handler)).search("Shikoku travel guide", 5)
+    assert hits[0]["url"] == "https://en.wikivoyage.org/wiki/Kochi_(Shikoku)"
+
+
+@pytest.mark.asyncio
+async def test_wikimedia_drops_same_named_places_when_the_exact_article_exists():
+    def handler(request):
+        if request.url.host == "en.wikivoyage.org":
+            return httpx.Response(200, json=_wiki_search(
+                "Kochi (Shikoku)", "Kochi", "Kochi (prefecture)", "Fort Kochi", "Kerala", request=request))
+        return httpx.Response(200, json=_wiki_search("Kochi", request=request))
+
+    hits = await WikimediaProvider(transport=httpx.MockTransport(handler)).search("kochi travel guide", 5)
+    titles = [h["title"] for h in hits]
+    assert "Kochi (Shikoku)" not in titles and "Kochi (prefecture)" not in titles
+    # Places that merely contain the name are related, not homonyms.
+    assert titles == ["Kochi", "Fort Kochi", "Kerala", "Kochi"]
+
+
+@pytest.mark.asyncio
+async def test_wikimedia_keeps_qualified_titles_without_an_exact_match():
+    """Only "Kochi (Shikoku)" exists - nothing tells which one was meant."""
+    def handler(request):
+        return httpx.Response(200, json=_wiki_search("Kochi (Shikoku)", "Kochi (prefecture)", request=request))
+
+    hits = await WikimediaProvider(transport=httpx.MockTransport(handler)).search("Kochi travel guide", 5)
+    assert {h["title"] for h in hits} == {"Kochi (Shikoku)", "Kochi (prefecture)"}
+
+
+@pytest.mark.asyncio
 async def test_wikimedia_sends_a_descriptive_user_agent():
     """Wikimedia refuses generic clients; see its User-Agent policy."""
     seen = []

@@ -1,7 +1,8 @@
 """Serves the fixture pages at the paths the discovery mock points to."""
+import json
 import os
 from http.server import BaseHTTPRequestHandler, HTTPServer
-from urllib.parse import urlparse
+from urllib.parse import parse_qs, urlparse
 
 ROOT = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), "fixtures", "wiki")
 HITS = []
@@ -15,6 +16,17 @@ class H(BaseHTTPRequestHandler):
         elif self.path == "/__hits":
             body = ("\n".join(HITS)).encode()
             ctype = "text/plain"
+        elif urlparse(self.path).path == "/w/api.php":
+            # MediaWiki action=parse, as the scraper fetches wiki articles.
+            title = parse_qs(urlparse(self.path).query).get("page", [""])[0]
+            path = os.path.join(ROOT, f"{title.replace(' ', '_')}.html")
+            if os.path.isfile(path):
+                with open(path, encoding="utf-8") as f:
+                    payload = {"parse": {"title": title, "displaytitle": title, "text": f.read()}}
+            else:
+                payload = {"error": {"code": "missingtitle", "info": "The page you specified doesn't exist."}}
+            body = json.dumps(payload).encode()
+            ctype = "application/json"
         else:
             # Match on the path alone, like a real site: a tracking parameter
             # does not change which page is served. (Looking the query up as
