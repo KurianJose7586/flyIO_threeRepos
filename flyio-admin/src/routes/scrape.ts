@@ -460,10 +460,25 @@ router.get(
         };
       });
 
+      // The job-level reason, for URLs that ended with no row of their own.
+      let jobError: string | null = null;
+      if (jobStatus === "failed" || jobStatus === "success") {
+        const ev = await query(
+          `SELECT COALESCE(detail->>'error', detail->>'message') AS reason
+           FROM job_events
+           WHERE job_id = $1 AND event_type IN ('failed', 'timeout', 'poll_error')
+             AND COALESCE(detail->>'error', detail->>'message') IS NOT NULL
+           ORDER BY id DESC LIMIT 1`,
+          [job_id]
+        );
+        jobError = ev.rows[0]?.reason ?? null;
+      }
+
       res.json({
         success: true,
         job_id,
         job_status: jobStatus,
+        job_error: jobError,
         urls: urlResults,
       });
     } catch (err: unknown) {

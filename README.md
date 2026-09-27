@@ -64,6 +64,14 @@ cd flyio-scraper-service
 .\.venv\Scripts\python scripts\try_discovery.py Jabalpur
 ```
 
+**Check crawling on its own** — fetches, parses and chunks a page exactly as a
+scraper job does, and says why if it gets nothing:
+
+```powershell
+cd flyio-scraper-service
+.\.venv\Scripts\python scripts\try_crawl.py https://en.wikivoyage.org/wiki/Delhi
+```
+
 ## Destination discovery
 
 Type a destination instead of pasting URLs. The scraper searches Wikivoyage

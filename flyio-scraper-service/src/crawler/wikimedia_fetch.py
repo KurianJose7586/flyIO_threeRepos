@@ -54,7 +54,8 @@ def wiki_article_title(url: str) -> tuple[str, str] | None:
     if not parts.path.startswith("/wiki/") or parts.query:
         return None
     title = unquote(parts.path[len("/wiki/"):]).replace("_", " ").strip()
-    if not title or "/" in title or _NAMESPACED.match(title):
+    # "Delhi/West" is a real Wikivoyage article (a district of Delhi).
+    if not title or title.startswith("/") or _NAMESPACED.match(title):
         return None
     # Same scheme as submitted: Wikimedia redirects http to https anyway.
     return f"{parts.scheme}://{host}/w/api.php", title

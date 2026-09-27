@@ -30,6 +30,7 @@ def _parse_response(title="Kochi", html=ARTICLE_HTML):
         ("https://en.wikipedia.org/wiki/S%C3%A3o_Paulo", ("https://en.wikipedia.org/w/api.php", "São Paulo")),
         ("https://de.wikivoyage.org/wiki/Kochi", ("https://de.wikivoyage.org/w/api.php", "Kochi")),
         ("http://en.wikivoyage.org/wiki/Kochi", ("http://en.wikivoyage.org/w/api.php", "Kochi")),
+        ("https://en.wikivoyage.org/wiki/Delhi/West", ("https://en.wikivoyage.org/w/api.php", "Delhi/West")),
     ],
 )
 def test_recognises_wiki_article_urls(url, expected):

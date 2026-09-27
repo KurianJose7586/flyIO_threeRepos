@@ -453,20 +453,12 @@ export async function waitForJobCompletion(
     await new Promise((resolve) => setTimeout(resolve, pollInterval));
   }
 
-  // Timeout reached
-  const timeoutErr = `Scraper job timed out after ${timeout}ms`;
-  await updateJobStatus(jobId, "failed");
+  // Timeout reached. Finalized like any other failure, so each URL gets a
+  // history row carrying this reason; without one the crawler card could
+  // only say "failed or produced no output".
+  const timeoutErr = `No result from the scraper service within ${Math.round(timeout / 1000)}s.`;
   await logEvent(jobId, "timeout", { message: timeoutErr });
-
-  return {
-    job_id: jobId,
-    status: "failed",
-    total: 0,
-    succeeded: 0,
-    failed: 0,
-    results: [],
-    error: timeoutErr,
-  };
+  return await processJobOutcome(jobId, { status: "failed", error: timeoutErr }, expectedUrls);
 }
 
 let schedulerTimer: NodeJS.Timeout | null = null;

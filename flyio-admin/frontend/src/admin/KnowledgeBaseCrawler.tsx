@@ -143,7 +143,8 @@ export const KnowledgeBaseCrawler: React.FC<{ onCrawlComplete: () => void }> = (
                 return {
                   ...card,
                   status: "failed",
-                  error: "Scrape job failed or produced no output",
+                  error: data.job_error
+                    || "The scraper returned nothing for this URL. Its window (or the [scraper] lines) says why.",
                 };
               }
               return {

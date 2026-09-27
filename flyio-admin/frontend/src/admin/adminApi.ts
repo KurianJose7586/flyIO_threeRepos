@@ -361,6 +361,8 @@ export interface JobUrlResultsResponse {
   success: boolean;
   job_id: string;
   job_status: string;
+  /** Why the job as a whole failed, when it did. */
+  job_error?: string | null;
   urls: JobUrlResult[];
 }
 
