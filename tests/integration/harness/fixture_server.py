@@ -21,7 +21,13 @@ class H(BaseHTTPRequestHandler):
             # part of the file name 404'd — and the crawler used to ingest
             # that 404 page as content, so a test passed on it.)
             name = urlparse(self.path).path.rstrip("/").split("/")[-1] or "index"
-            path = os.path.join(ROOT, f"{name}.html")
+            # A host-specific page wins (fixtures/<host>/<name>.html) so two
+            # sites for one destination are genuinely different pages; the
+            # shared fixtures/wiki/ copy is the fallback.
+            host = (self.headers.get("Host") or "").split(":")[0].lower()
+            path = os.path.join(os.path.dirname(ROOT), host, f"{name}.html")
+            if not os.path.isfile(path):
+                path = os.path.join(ROOT, f"{name}.html")
             if not os.path.isfile(path):
                 self.send_error(404, "no fixture")
                 return
