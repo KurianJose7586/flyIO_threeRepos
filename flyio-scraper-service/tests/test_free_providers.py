@@ -23,8 +23,11 @@ from src.discovery.providers import (
 from src.discovery.queries import build_queries
 
 
-def _wiki_search(*titles):
-    """MediaWiki `list=search` response, formatversion=2."""
+def _wiki_search(*titles, request=None):
+    """MediaWiki `list=search` response, formatversion=2. Honours srlimit
+    when given the request, as the real API does."""
+    if request is not None:
+        titles = titles[: int(request.url.params["srlimit"])]
     return {"batchcomplete": True, "query": {"search": [{"ns": 0, "title": t, "pageid": i} for i, t in enumerate(titles)]}}
 
 
@@ -37,8 +40,8 @@ async def test_wikimedia_searches_both_wikis_once_for_all_five_queries():
     def handler(request: httpx.Request) -> httpx.Response:
         calls.append(request)
         if request.url.host == "en.wikivoyage.org":
-            return httpx.Response(200, json=_wiki_search("Jabalpur", "Bhedaghat"))
-        return httpx.Response(200, json=_wiki_search("Jabalpur", "Jabalpur Junction railway station"))
+            return httpx.Response(200, json=_wiki_search("Jabalpur", "Bhedaghat", request=request))
+        return httpx.Response(200, json=_wiki_search("Jabalpur", "Jabalpur Lok Sabha constituency", request=request))
 
     provider = WikimediaProvider(transport=httpx.MockTransport(handler))
     hits, errors = await search_all(provider, build_queries("Jabalpur"), 5)
@@ -49,18 +52,25 @@ async def test_wikimedia_searches_both_wikis_once_for_all_five_queries():
     # Searched for the destination, not "how to reach Jabalpur by train…".
     assert all(r.url.params["srsearch"] == "Jabalpur" for r in calls)
     assert all(r.url.params["srnamespace"] == "0" for r in calls)
+    # Wikipedia contributes only its best match; Wikivoyage all of its.
+    assert {r.url.host: r.url.params["srlimit"] for r in calls} == {
+        "en.wikivoyage.org": "5", "en.wikipedia.org": "1",
+    }
+    urls = {h["url"] for h in hits}
+    assert "https://en.wikipedia.org/wiki/Jabalpur" in urls
+    assert not any("constituency" in u for u in urls)
     # Every topic query still gets the hits, so provenance stays per query.
-    assert len(hits) == 4 * 5
+    assert len(hits) == 3 * 5
 
 
 @pytest.mark.asyncio
 async def test_wikimedia_builds_canonical_article_urls():
     def handler(request):
-        return httpx.Response(200, json=_wiki_search("Jabalpur Junction railway station", "Kanha National Park"))
+        return httpx.Response(200, json=_wiki_search("Kanha National Park", request=request))
 
     hits = await WikimediaProvider(transport=httpx.MockTransport(handler)).search("Jabalpur travel guide", 5)
     urls = [h["url"] for h in hits]
-    assert "https://en.wikivoyage.org/wiki/Jabalpur_Junction_railway_station" in urls
+    assert "https://en.wikivoyage.org/wiki/Kanha_National_Park" in urls
     assert "https://en.wikipedia.org/wiki/Kanha_National_Park" in urls
 
 

@@ -47,13 +47,16 @@ class Settings(BaseSettings):
     #   searxng     free — web-wide via your own SearXNG (set SEARXNG_URL)
     #   tavily, brave  paid — need SEARCH_API_KEY
     #   mock        offline synthetic results, for tests only
-    # Recommended: "wikimedia,duckduckgo" — reliable core plus web breadth.
+    # This deployment uses "wikimedia": free, official, no key.
     SEARCH_PROVIDER: str = "wikimedia"
     SEARCH_API_KEY: str = ""
     SEARXNG_URL: str = ""
     # Wikimedia refuses anonymous-looking clients; see its User-Agent policy.
     # Adding a contact (URL or email) in parentheses is requested there.
-    SEARCH_USER_AGENT: str = "flyio-scraper-service/1.0 (travel destination discovery)"
+    SEARCH_USER_AGENT: str = (
+        "flyio-scraper-service/1.0 "
+        "(+https://github.com/KurianJose7586/flyIO_threeRepos; travel destination discovery)"
+    )
     # Region hint for duckduckgo ("in-en" = India, English).
     SEARCH_REGION: str = "in-en"
 

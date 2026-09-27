@@ -185,7 +185,7 @@ async def scrape_urls(
                 "application/json": {
                     "example": {
                         "destination": "Jabalpur",
-                        "provider": "wikimedia+duckduckgo",
+                        "provider": "wikimedia",
                         "queries": [
                             "Jabalpur travel guide",
                             "things to do in Jabalpur",

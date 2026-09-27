@@ -18,6 +18,11 @@ os.environ.setdefault("SERVICE_API_KEY", "unused-by-this-script")
 
 
 def main() -> int:
+    # A Windows console on a legacy code page cannot print every destination
+    # name (Devanagari, for one); degrade those characters instead of crashing.
+    for stream in (sys.stdout, sys.stderr):
+        if hasattr(stream, "reconfigure"):
+            stream.reconfigure(errors="replace")
     parser = argparse.ArgumentParser(description=__doc__.splitlines()[0])
     parser.add_argument("destination")
     parser.add_argument("--provider", help="override SEARCH_PROVIDER, e.g. wikimedia,duckduckgo")
@@ -30,7 +35,7 @@ def main() -> int:
     from src.config.settings import get_settings  # noqa: E402 — after env is set
     from src.discovery import DiscoveryError, discover  # noqa: E402
 
-    print(f"Searching for {args.destination!r} with {get_settings().SEARCH_PROVIDER} …\n")
+    print(f"Searching for {args.destination!r} with {get_settings().SEARCH_PROVIDER} ...\n")
     try:
         result = asyncio.run(discover(args.destination, args.max_urls))
     except DiscoveryError as exc:

@@ -185,7 +185,12 @@ class MockProvider:
         return [{**h, "query": query} for h in hits[:max_results]]
 
 
-DEFAULT_USER_AGENT = "flyio-scraper-service/1.0 (travel destination discovery)"
+# Wikimedia's User-Agent policy asks for a way to reach the operator; the
+# project URL serves. Override with SEARCH_USER_AGENT to add an email.
+DEFAULT_USER_AGENT = (
+    "flyio-scraper-service/1.0 "
+    "(+https://github.com/KurianJose7586/flyIO_threeRepos; travel destination discovery)"
+)
 
 
 class WikimediaProvider:
@@ -203,7 +208,12 @@ class WikimediaProvider:
     """
 
     name = "wikimedia"
-    SITES = ("en.wikivoyage.org", "en.wikipedia.org")  # most useful first
+    # (site, result limit). Every Wikivoyage article is a travel guide, so
+    # related results (a nearby park, the state) are worth offering. Wikipedia
+    # search for a city name also returns its constituency, colleges and
+    # railway station, so only its best match — the city article — is taken.
+    # None means "use the per-query limit".
+    SITES = (("en.wikivoyage.org", None), ("en.wikipedia.org", 1))
 
     def __init__(
         self,
@@ -232,7 +242,10 @@ class WikimediaProvider:
             headers={"User-Agent": self._user_agent},
         ) as client:
             results = await asyncio.gather(
-                *(self._search_site(client, site, term, max_results) for site in self.SITES),
+                *(
+                    self._search_site(client, site, term, limit or max_results)
+                    for site, limit in self.SITES
+                ),
                 return_exceptions=True,
             )
         hits = [h for r in results if not isinstance(r, BaseException) for h in r]
