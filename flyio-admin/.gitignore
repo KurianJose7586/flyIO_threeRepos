@@ -1,0 +1,23 @@
+# Dependencies
+node_modules/
+frontend/node_modules/
+
+# Build output
+dist/
+frontend/dist/
+
+# Environment — never commit real credentials
+.env
+
+# OS / Editor
+.DS_Store
+*.swp
+*.swo
+Thumbs.db
+
+# TypeScript build info
+*.tsbuildinfo
+
+# Logs
+*.log
+npm-debug.log*

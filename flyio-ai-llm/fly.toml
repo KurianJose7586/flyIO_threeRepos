@@ -1,0 +1,85 @@
+# fly.toml — flyio-ai-llm
+#
+# Every credential belongs in Fly secrets, never in this file (it is committed):
+#
+#   fly secrets set SERVICE_API_KEY=...      # the key flyio-admin sends as X-Service-API-Key
+#   fly secrets set LLM_API_KEY=gsk_...      # Groq
+#   fly secrets set QDRANT_API_KEY=...
+#   fly secrets set QDRANT_URL="https://qdrant-console.flyio.ai:443"
+#   fly secrets set DATABASE_URL="postgresql://user:pass@host:5432/db"
+#
+# QDRANT_URL must carry an explicit port. The Qdrant client does not infer 443
+# from an https:// scheme — it falls back to 6333 and the connection fails while
+# the same URL works fine in curl. See .env.example.
+
+app            = "flyio-ai-llm"
+primary_region = "sin"  # colocated with flyio-scraper-service
+
+[build]
+
+# ── HTTP service ──────────────────────────────────────────────────────────────
+# internal_port matches the Dockerfile's EXPOSE/uvicorn --port 8000.
+[http_service]
+  internal_port        = 8000
+  force_https          = true
+  auto_start_machines  = true
+  # Deliberately NOT auto-stopping. With EMBEDDING_PROVIDER=local the first
+  # request after a cold start pays for loading the ONNX model into memory, and
+  # Admin's /api/admin/llm/generate already sits inside a scrape-and-retry
+  # pipeline with a 120s client timeout. Keeping one machine warm trades a small
+  # idle cost for not putting that startup latency on a user-facing request.
+  auto_stop_machines   = false
+  min_machines_running = 1
+
+  [http_service.concurrency]
+    type       = "requests"
+    hard_limit = 25
+    soft_limit = 20
+
+# ── VM sizing ─────────────────────────────────────────────────────────────────
+# 2GB because EMBEDDING_PROVIDER=local holds BAAI/bge-base-en-v1.5 (768-dim) in
+# memory via fastembed/ONNX — roughly 500MB resident on top of the Python and
+# FastAPI baseline. 1GB leaves no headroom for a concurrent LLM request.
+# If you switch EMBEDDING_PROVIDER to "openai", 1GB is sufficient.
+[[vm]]
+  memory   = "2gb"
+  cpu_kind = "shared"
+  cpus     = 1
+
+# ── Non-secret environment variables ─────────────────────────────────────────
+# Safe to commit: no credentials. Anything sensitive goes through `fly secrets`.
+[env]
+  ENVIRONMENT                   = "production"
+  DEBUG                         = "false"
+  LOG_LEVEL                     = "INFO"
+  LOG_FORMAT                    = "json"
+  PORT                          = "8000"
+
+  LLM_PROVIDER                  = "groq"
+  LLM_MODEL                     = "openai/gpt-oss-120b"
+
+  # Must stay consistent with the Qdrant collection's configured vector size —
+  # a mismatch is rejected at write time. Changing the model means recreating
+  # the collection.
+  EMBEDDING_PROVIDER            = "local"
+  EMBEDDING_MODEL               = "BAAI/bge-base-en-v1.5"
+  EMBEDDING_DIMENSION           = "768"
+
+  QDRANT_COLLECTION_NAME        = "flyio_knowledge_base"
+  # Tuned for the local embedding provider, which reports lower absolute cosine
+  # similarity than OpenAI's models. Raise toward 0.70 if EMBEDDING_PROVIDER
+  # changes to "openai".
+  QDRANT_SEARCH_SCORE_THRESHOLD = "0.45"
+
+  DATABASE_ENABLED              = "true"
+
+# ── Health check ──────────────────────────────────────────────────────────────
+# /health is public (ServiceAuthMiddleware exempts /health*), so this needs no
+# API key. It does not check Qdrant — use /health/qdrant for that, which Admin
+# surfaces via GET /api/admin/llm/health.
+[[services.http_checks]]
+  interval     = "30s"
+  timeout      = "5s"
+  grace_period = "20s"
+  method       = "GET"
+  path         = "/health"

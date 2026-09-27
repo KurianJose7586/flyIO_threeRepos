@@ -1,0 +1,21 @@
+# Pinned to the minor version verified working locally (full suite + live
+# uvicorn boot + live Postgres) as of Phase 1. `~=X.Y.Z` allows patch-level
+# updates (bugfixes, security) but blocks an unreviewed minor/major jump —
+# previously all deps were open-ended `>=`, so `docker build` and a fresh
+# local `pip install` could each silently resolve a different, untested
+# version of everything.
+fastapi~=0.136.1
+uvicorn[standard]~=0.47.0
+pydantic~=2.13.4
+pydantic-settings~=2.14.1
+qdrant-client~=1.17.0
+# fastembed: local/offline embedding provider (EMBEDDING_PROVIDER=local, see
+# app/services/embeddings/local_provider.py). ONNX runtime based — chosen
+# specifically to avoid a torch/CUDA dependency for this.
+fastembed~=0.7.4
+httpx~=0.28.1
+python-dotenv~=1.2.2
+asyncpg~=0.31.0
+pytest~=9.1.1
+pytest-asyncio~=1.4.0
+pytest-mock~=3.15.1

@@ -1,0 +1,56 @@
+# The Dockerfile ends with `COPY . .`, so anything not excluded here is baked
+# into the published image. Without this file .env ships inside the image —
+# LLM_API_KEY, QDRANT_API_KEY and DATABASE_URL included — readable by anyone
+# who can pull it. Runtime config comes from `fly secrets`, never from a file
+# in the image.
+.env
+.env.*
+!.env.example
+
+# VCS and local tooling
+.git
+.gitignore
+.github
+*.md
+!README.md
+docs/
+
+# Python bytecode / build artifacts
+__pycache__/
+*.py[cod]
+*.egg-info/
+.eggs/
+dist/
+build/
+
+# Virtual environments — never copy a host venv into a Linux image
+.venv/
+venv/
+env/
+
+# Tests and their caches: not needed at runtime, and copying them enlarges the
+# image and its attack surface for no benefit.
+tests/
+.pytest_cache/
+.coverage
+htmlcov/
+.mypy_cache/
+.ruff_cache/
+
+# IDE
+.vscode/
+.idea/
+*.swp
+.git
+.env
+.env.*
+**/.env
+**/.env.*
+.venv
+venv
+**/__pycache__
+**/*.pyc
+.pytest_cache
+**/*@tmp*
+JenkinsDev
+scripts

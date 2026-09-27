@@ -1,0 +1,103 @@
+// Run this job on the Docker host shared with Nginx Proxy Manager.
+// Required: Docker CLI, Python 3, Credentials Binding plugin, an existing
+// NPM proxy host/certificate, and both containers on DOCKER_NETWORK.
+pipeline {
+    agent { label 'docker-flyio-eu-1' }
+    options {
+        disableConcurrentBuilds()
+        skipDefaultCheckout(true)
+        timestamps()
+        buildDiscarder(logRotator(numToKeepStr: '20'))
+    }
+    parameters {
+        string(name: 'DOCKER_NETWORK', defaultValue: 'nginx-proxy-manager', description: 'Existing Docker network attached to NPM on this Docker host.')
+        string(name: 'NPM_URL', defaultValue: 'https://npm-domain.flyio.ai', description: 'NPM management URL with /api reachable.')
+        string(name: 'NPM_CREDENTIAL_ID', defaultValue: 'NPM_CREDENTIAL', description: 'Jenkins username/password credential: NPM email and password.')
+        string(name: 'SERVICE_API_KEY', defaultValue: '', description: 'Optional override for SERVICE_API_KEY.')
+    }
+    environment {
+        CLEANUP_SERVICE = 'llm-dev'
+        SERVICE_DOMAIN = 'dev-flyio-ai-llm.flyio.ai'
+        IMAGE_NAME = 'flyio-ai-llm'
+    }
+    stages {
+        stage('Checkout and preflight') {
+            steps {
+                checkout scm
+                script {
+                    // Job hash prevents collisions with build numbers in other jobs.
+                    env.RELEASE = sh(returnStdout: true, script: '''python3 -c 'import hashlib,os; print("dev-" + hashlib.sha256(os.environ["JOB_NAME"].encode()).hexdigest()[:8] + "-" + os.environ["BUILD_NUMBER"])' ''').trim()
+                    env.CANDIDATE = "llm-${env.RELEASE}"
+                    env.IMAGE_TAG = "${env.IMAGE_NAME}:${env.RELEASE}"
+                }
+                sh '''
+                    set -eu
+                    docker info >/dev/null
+                    docker network inspect "$DOCKER_NETWORK" >/dev/null
+                    python3 --version
+                '''
+                withCredentials([usernamePassword(credentialsId: params.NPM_CREDENTIAL_ID, usernameVariable: 'NPM_USERNAME', passwordVariable: 'NPM_PASSWORD')]) {
+                    sh 'python3 scripts/deploy_dev.py preflight'
+                }
+            }
+        }
+        stage('Build image') {
+            steps {
+                timeout(time: 30, unit: 'MINUTES') {
+                    sh 'docker build --tag "$IMAGE_TAG" .'
+                }
+            }
+        }
+        stage('Start candidate') {
+            steps {
+                withCredentials([file(credentialsId: 'env-dev-flyio-ai-llm', variable: 'ENV_FILE')]) {
+                    sh '''
+                        set +x
+                        set -eu
+                        KEY_ARG=""
+                        if [ -n "${SERVICE_API_KEY:-}" ]; then
+                            KEY_ARG="--env SERVICE_API_KEY=${SERVICE_API_KEY}"
+                        fi
+                        docker run --detach --name "$CANDIDATE" \
+                            --network "$DOCKER_NETWORK" --restart unless-stopped \
+                            --label flyio.service=llm-dev \
+                            --label "flyio.build=$BUILD_NUMBER" \
+                            --env-file "$ENV_FILE" $KEY_ARG --env ENVIRONMENT=development --env PORT=8000 --env EMBEDDING_PROVIDER=local "$IMAGE_TAG"
+                    '''
+                }
+            }
+        }
+        stage('Check candidate') {
+            steps {
+                sh 'python3 scripts/deploy_dev.py check'
+            }
+        }
+        stage('Switch NPM and verify') {
+            steps {
+                withCredentials([usernamePassword(credentialsId: params.NPM_CREDENTIAL_ID, usernameVariable: 'NPM_USERNAME', passwordVariable: 'NPM_PASSWORD')]) {
+                    sh 'python3 scripts/deploy_dev.py promote'
+                }
+            }
+        }
+        stage('Clean old development releases') {
+            steps {
+                // Cleanup failure must not roll back the healthy deployment.
+                catchError(buildResult: 'UNSTABLE', stageResult: 'UNSTABLE') {
+                    withCredentials([usernamePassword(credentialsId: params.NPM_CREDENTIAL_ID, usernameVariable: 'NPM_USERNAME', passwordVariable: 'NPM_PASSWORD')]) {
+                        sh 'python3 scripts/cleanup_dev.py'
+                    }
+                }
+            }
+        }
+    }
+    post {
+        success {
+            echo 'Deployment verified. Older development releases cleaned up; volumes preserved.'
+        }
+        unsuccessful {
+            // Do not delete a candidate: an interrupted NPM update may already
+            // have routed traffic to it. The helper rolls back ordinary failures.
+            echo 'Check failed/unstable stages and NPM upstream. Cleanup may be incomplete; volumes are preserved.'
+        }
+    }
+}

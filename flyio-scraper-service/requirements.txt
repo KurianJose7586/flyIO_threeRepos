@@ -1,0 +1,44 @@
+# Pinned with ~= (compatible release: locks the minor version, allows
+# patch-level bugfixes) — previously every dependency was open-ended `>=`,
+# so a fresh `pip install` today vs. a week ago could resolve a
+# meaningfully different version of everything. Concretely real here, not
+# hypothetical: `crawl4ai>=0.4.0` was resolving to 0.9.3 (5 minor versions
+# past the floor this code was presumably written against) before this pin.
+
+# ── FastAPI service layer ────────────────────────────────────────────────────
+# Verified: fresh install + full test suite pass on these exact versions.
+fastapi~=0.141.1
+uvicorn[standard]~=0.52.4
+pydantic-settings~=2.15.0
+python-dotenv~=1.2.3
+
+# ── Legacy crawler dependencies (from travel_pipeline/requirements.txt) ──────
+# crawl4ai: verified — installed fresh, and confirmed the exact imports
+# legacy_crawler/crawler/crawl4ai_crawler.py uses (AsyncWebCrawler,
+# BrowserConfig, CrawlerRunConfig, CacheMode) still resolve at this version,
+# via the real production lazy-import path (src/crawler/wrapper.py), not
+# just a bare `import crawl4ai`.
+crawl4ai~=0.9.3
+# scrapling: pinned to current latest, but NOT fully verified — importing
+# scrapling.fetchers.Fetcher failed in the environment used to verify the
+# rest of this file, tracing to curl_cffi's native wrapper failing to load
+# (a Windows-path-length artifact in that specific environment, not a
+# confirmed cross-platform issue — this service deploys to Linux). Low risk
+# either way: legacy_crawler/crawler/resilience.py already wraps this
+# import in a broad `except Exception` and falls back to a plain requests
+# session if scrapling is unavailable for any reason — that fallback path
+# is real production behavior, not just a test convenience. Recommend
+# verifying this import specifically in a real Linux/Docker build before
+# relying on the Scrapling fallback tier.
+scrapling~=0.4.15
+beautifulsoup4~=4.15.0
+lxml~=6.1.2
+requests~=2.34.2
+tenacity~=9.1.4
+mwparserfromhell~=0.7.2
+
+# ── Testing ───────────────────────────────────────────────────────────────────
+pytest~=9.1.1
+pytest-asyncio~=1.4.0
+pytest-mock~=3.15.1
+httpx~=0.28.1

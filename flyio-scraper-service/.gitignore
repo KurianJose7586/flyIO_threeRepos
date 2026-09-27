@@ -1,0 +1,31 @@
+# Python
+__pycache__/
+*.py[cod]
+*.egg-info/
+.eggs/
+dist/
+build/
+*.so
+
+# Virtual environments
+.venv/
+venv/
+env/
+
+# Environment secrets — NEVER commit
+.env
+
+# Crawler artifacts (not part of the service source)
+legacy_crawler/raw_cache/
+legacy_crawler/output/
+legacy_crawler/chroma_db/
+# The Wikivoyage crawler writes its raw API cache to <repo>/travel_pipeline/raw_cache
+# (wikivoyage_api.py joins "travel_pipeline" into the path explicitly — a leftover
+# from the original project layout, so it does NOT land under legacy_crawler/ where
+# the rules above would catch it). Real runs drop cached page JSON here.
+travel_pipeline/
+
+# IDE
+.vscode/
+.idea/
+*.swp

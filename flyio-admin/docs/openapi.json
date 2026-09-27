@@ -1,0 +1,405 @@
+{
+  "openapi": "3.0.3",
+  "info": {
+    "title": "flyio-admin API",
+    "description": "Application and Orchestration layer API for Flyio.ai — CMS, Blog, Trips, Knowledge Base, Web Scraper coordination, and LLM Workflow Orchestration.",
+    "version": "1.0.0",
+    "contact": {
+      "name": "Flyio.ai Engineering"
+    }
+  },
+  "servers": [
+    {
+      "url": "/",
+      "description": "Current Server"
+    }
+  ],
+  "components": {
+    "securitySchemes": {
+      "bearerAuth": {
+        "type": "http",
+        "scheme": "bearer",
+        "bearerFormat": "JWT",
+        "description": "Admin JWT token acquired via POST /api/admin/login"
+      }
+    },
+    "schemas": {
+      "SuccessResponse": {
+        "type": "object",
+        "properties": {
+          "success": { "type": "boolean", "example": true },
+          "message": { "type": "string" }
+        }
+      },
+      "ErrorResponse": {
+        "type": "object",
+        "properties": {
+          "success": { "type": "boolean", "example": false },
+          "error": { "type": "string", "example": "Bad Request" },
+          "detail": { "type": "string", "example": "Field is required" }
+        }
+      },
+      "LoginRequest": {
+        "type": "object",
+        "required": ["username", "password"],
+        "properties": {
+          "username": { "type": "string", "example": "admin" },
+          "password": { "type": "string", "example": "admin1234" }
+        }
+      },
+      "LoginResponse": {
+        "type": "object",
+        "properties": {
+          "success": { "type": "boolean", "example": true },
+          "token": { "type": "string", "example": "eyJhbGciOiJIUzI1NiIsInR5cCI6..." },
+          "admin": {
+            "type": "object",
+            "properties": {
+              "id": { "type": "integer", "example": 1 },
+              "username": { "type": "string", "example": "admin" }
+            }
+          }
+        }
+      },
+      "LLMGenerateRequest": {
+        "type": "object",
+        "required": ["prompt"],
+        "properties": {
+          "prompt": { "type": "string", "example": "Create a 5-day travel itinerary for Paris, France" },
+          "urls": {
+            "type": "array",
+            "items": { "type": "string" },
+            "description": "Optional specific source URLs to crawl if data is missing in vector database",
+            "example": ["https://en.wikipedia.org/wiki/Paris"]
+          },
+          "metadata": {
+            "type": "object",
+            "additionalProperties": true
+          }
+        }
+      },
+      "LLMGenerateResponse": {
+        "type": "object",
+        "properties": {
+          "success": { "type": "boolean", "example": true },
+          "request_id": { "type": "string", "example": "req_8f7b2c1d4e0a" },
+          "status": { "type": "string", "enum": ["data_found", "data_required", "generation_failed"], "example": "data_found" },
+          "plan": { "type": "object", "description": "Synthesized AI travel plan object" },
+          "results": { "type": "array", "items": { "type": "object" } },
+          "message": { "type": "string" },
+          "scraped_sources": { "type": "array", "items": { "type": "string" } },
+          "execution_time_ms": { "type": "number", "example": 1450 }
+        }
+      },
+      "LLMStoreRequest": {
+        "type": "object",
+        "properties": {
+          "source_url": { "type": "string", "example": "https://en.wikipedia.org/wiki/Paris" },
+          "all": { "type": "boolean", "example": false }
+        }
+      },
+      "CrawlRequest": {
+        "type": "object",
+        "required": ["urls"],
+        "properties": {
+          "urls": { "type": "string", "description": "One URL per line", "example": "https://example.com/guide\nhttps://example.com/hotels" },
+          "async": { "type": "boolean", "example": false }
+        }
+      },
+      "BlogPost": {
+        "type": "object",
+        "properties": {
+          "id": { "type": "integer" },
+          "title": { "type": "string" },
+          "slug": { "type": "string" },
+          "summary": { "type": "string" },
+          "author": { "type": "string" },
+          "banner": { "type": "string" },
+          "category_id": { "type": "integer", "nullable": true },
+          "category_name": { "type": "string" },
+          "tags": { "type": "array", "items": { "type": "object" } },
+          "body": { "type": "string" },
+          "published_at": { "type": "string", "format": "date-time", "nullable": true },
+          "created_at": { "type": "string", "format": "date-time" },
+          "updated_at": { "type": "string", "format": "date-time" }
+        }
+      }
+    }
+  },
+  "paths": {
+    "/health": {
+      "get": {
+        "summary": "Health check",
+        "tags": ["System"],
+        "responses": {
+          "200": { "description": "Service is healthy" },
+          "503": { "description": "Database unreachable" }
+        }
+      }
+    },
+    "/api/admin/login": {
+      "post": {
+        "summary": "Admin Login",
+        "tags": ["Authentication"],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": { "$ref": "#/components/schemas/LoginRequest" }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Authenticated successfully",
+            "content": { "application/json": { "schema": { "$ref": "#/components/schemas/LoginResponse" } } }
+          },
+          "401": { "description": "Invalid credentials" }
+        }
+      }
+    },
+    "/api/admin/me": {
+      "get": {
+        "summary": "Get authenticated admin profile",
+        "tags": ["Authentication"],
+        "security": [{ "bearerAuth": [] }],
+        "responses": {
+          "200": { "description": "Admin profile" },
+          "401": { "description": "Unauthorized" }
+        }
+      }
+    },
+    "/api/admin/llm/generate": {
+      "post": {
+        "summary": "Generate Travel Plan with Automated LLM & Scraper Ingestion Orchestration",
+        "description": "Orchestrates the entire pipeline: creates request_id, calls LLM Generate API, automatically triggers scraper + JSON conversion + Qdrant vector store if data_required, retries LLM plan generation, logs lifecycle events, and returns synthesized travel plan.",
+        "tags": ["LLM Orchestration"],
+        "security": [{ "bearerAuth": [] }],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": { "$ref": "#/components/schemas/LLMGenerateRequest" }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Plan generated successfully",
+            "content": { "application/json": { "schema": { "$ref": "#/components/schemas/LLMGenerateResponse" } } }
+          },
+          "502": { "description": "LLM or Scraper Service communication error" }
+        }
+      }
+    },
+    "/api/admin/llm/store": {
+      "post": {
+        "summary": "Ingest Knowledge Base chunks into LLM Vector Store (Qdrant)",
+        "tags": ["LLM Orchestration"],
+        "security": [{ "bearerAuth": [] }],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": { "$ref": "#/components/schemas/LLMStoreRequest" }
+            }
+          }
+        },
+        "responses": {
+          "200": { "description": "Documents ingested into vector database" }
+        }
+      }
+    },
+    "/api/admin/llm/health": {
+      "get": {
+        "summary": "Check LLM Service & Qdrant connectivity",
+        "tags": ["LLM Orchestration"],
+        "security": [{ "bearerAuth": [] }],
+        "responses": {
+          "200": { "description": "LLM service and Qdrant are connected" }
+        }
+      }
+    },
+    "/api/admin/prompts": {
+      "get": {
+        "summary": "List prompt history",
+        "tags": ["Prompt History"],
+        "security": [{ "bearerAuth": [] }],
+        "parameters": [
+          { "name": "page", "in": "query", "schema": { "type": "integer", "default": 1 } },
+          { "name": "limit", "in": "query", "schema": { "type": "integer", "default": 20 } }
+        ],
+        "responses": {
+          "200": { "description": "Paginated prompt history" }
+        }
+      }
+    },
+    "/api/admin/prompts/{request_id}": {
+      "get": {
+        "summary": "Get prompt detail and cross-service request_events lifecycle trace",
+        "tags": ["Prompt History"],
+        "security": [{ "bearerAuth": [] }],
+        "parameters": [
+          { "name": "request_id", "in": "path", "required": true, "schema": { "type": "string" } }
+        ],
+        "responses": {
+          "200": { "description": "Prompt detail and correlated events timeline" },
+          "404": { "description": "Prompt record not found" }
+        }
+      },
+      "delete": {
+        "summary": "Delete prompt record and associated event traces",
+        "tags": ["Prompt History"],
+        "security": [{ "bearerAuth": [] }],
+        "parameters": [
+          { "name": "request_id", "in": "path", "required": true, "schema": { "type": "string" } }
+        ],
+        "responses": {
+          "200": { "description": "Deleted successfully" }
+        }
+      }
+    },
+    "/api/admin/crawl": {
+      "post": {
+        "summary": "Submit URLs to Scraper Service",
+        "description": "Submits batch of URLs to Scraper Service. By default, waits synchronously until scraping finishes and extracts chunks into knowledge_base and audit log.",
+        "tags": ["Knowledge Base & Scraper"],
+        "security": [{ "bearerAuth": [] }],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": { "$ref": "#/components/schemas/CrawlRequest" }
+            }
+          }
+        },
+        "responses": {
+          "200": { "description": "Scrape completed and chunks stored in knowledge base" }
+        }
+      }
+    },
+    "/api/admin/knowledge-base": {
+      "get": {
+        "summary": "List indexed knowledge base sources",
+        "tags": ["Knowledge Base & Scraper"],
+        "security": [{ "bearerAuth": [] }],
+        "responses": {
+          "200": { "description": "Paginated knowledge base sources" }
+        }
+      },
+      "delete": {
+        "summary": "Delete entries from knowledge base by source_url or chunk id",
+        "tags": ["Knowledge Base & Scraper"],
+        "security": [{ "bearerAuth": [] }],
+        "parameters": [
+          { "name": "source_url", "in": "query", "schema": { "type": "string" } },
+          { "name": "id", "in": "query", "schema": { "type": "integer" } }
+        ],
+        "responses": {
+          "200": { "description": "Deleted from knowledge base" }
+        }
+      }
+    },
+    "/api/admin/knowledge-base/chunks": {
+      "get": {
+        "summary": "List all chunks for a source URL",
+        "tags": ["Knowledge Base & Scraper"],
+        "security": [{ "bearerAuth": [] }],
+        "parameters": [
+          { "name": "source_url", "in": "query", "required": true, "schema": { "type": "string" } }
+        ],
+        "responses": {
+          "200": { "description": "Chunks list" }
+        }
+      }
+    },
+    "/api/admin/crawl-history": {
+      "get": {
+        "summary": "Permanent audit log of all crawl attempts",
+        "tags": ["Knowledge Base & Scraper"],
+        "security": [{ "bearerAuth": [] }],
+        "responses": {
+          "200": { "description": "Paginated crawl history" }
+        }
+      }
+    },
+    "/api/blog/posts": {
+      "get": {
+        "summary": "Public blog posts with sorting",
+        "tags": ["Blog"],
+        "parameters": [
+          { "name": "page", "in": "query", "schema": { "type": "integer", "default": 1 } },
+          { "name": "limit", "in": "query", "schema": { "type": "integer", "default": 10 } },
+          { "name": "sort", "in": "query", "schema": { "type": "string", "enum": ["created_at", "author"], "default": "created_at" } },
+          { "name": "order", "in": "query", "schema": { "type": "string", "enum": ["asc", "desc"], "default": "desc" } }
+        ],
+        "responses": {
+          "200": { "description": "Paginated blog posts list" }
+        }
+      }
+    },
+    "/api/blog/posts/{slug}": {
+      "get": {
+        "summary": "Public single blog post by slug",
+        "tags": ["Blog"],
+        "parameters": [
+          { "name": "slug", "in": "path", "required": true, "schema": { "type": "string" } }
+        ],
+        "responses": {
+          "200": { "description": "Blog post detail" },
+          "404": { "description": "Post not found" }
+        }
+      }
+    },
+    "/api/admin/blog/posts": {
+      "get": {
+        "summary": "List admin blog posts",
+        "tags": ["Blog Admin"],
+        "security": [{ "bearerAuth": [] }],
+        "responses": { "200": { "description": "Posts list" } }
+      },
+      "post": {
+        "summary": "Create new blog post",
+        "tags": ["Blog Admin"],
+        "security": [{ "bearerAuth": [] }],
+        "responses": { "200": { "description": "Post created" } }
+      }
+    },
+    "/api/admin/blog/categories": {
+      "get": {
+        "summary": "List blog categories",
+        "tags": ["Blog Taxonomy"],
+        "security": [{ "bearerAuth": [] }],
+        "responses": { "200": { "description": "Categories list" } }
+      },
+      "post": {
+        "summary": "Create category",
+        "tags": ["Blog Taxonomy"],
+        "security": [{ "bearerAuth": [] }],
+        "responses": { "200": { "description": "Category created" } }
+      }
+    },
+    "/api/admin/blog/tags": {
+      "get": {
+        "summary": "List blog tags",
+        "tags": ["Blog Taxonomy"],
+        "security": [{ "bearerAuth": [] }],
+        "responses": { "200": { "description": "Tags list" } }
+      },
+      "post": {
+        "summary": "Create tag",
+        "tags": ["Blog Taxonomy"],
+        "security": [{ "bearerAuth": [] }],
+        "responses": { "200": { "description": "Tag created" } }
+      }
+    },
+    "/api/admin/config/ckeditor": {
+      "get": {
+        "summary": "Dynamic CKEditor toolbar configuration from environment",
+        "tags": ["Configuration"],
+        "security": [{ "bearerAuth": [] }],
+        "responses": { "200": { "description": "Toolbar items array" } }
+      }
+    }
+  }
+}

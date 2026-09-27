@@ -1,0 +1,56 @@
+# fly.toml — flyio-scraper-service
+#
+# All sensitive config (SERVICE_API_KEY, TOURISM_SOURCES_JSON, tuning vars)
+# must be set via Fly secrets — NEVER put real values here:
+#
+#   fly secrets set SERVICE_API_KEY=your-secret-key
+#   fly secrets set TOURISM_SOURCES_JSON='[{"name":"..."}]'
+#
+# Public env vars (non-secret tuning) go in [env] below.
+
+app            = "flyio-scraper-service"
+primary_region = "sin"
+
+[build]
+
+# ── HTTP service ──────────────────────────────────────────────────────────────
+[http_service]
+  internal_port        = 8080
+  force_https          = true
+  auto_stop_machines   = true
+  auto_start_machines  = true
+  min_machines_running = 0
+
+  [http_service.concurrency]
+    type       = "requests"
+    hard_limit = 10
+    soft_limit = 8
+
+# ── VM sizing ─────────────────────────────────────────────────────────────────
+# 1GB RAM is the minimum for Playwright/Chromium to run reliably.
+[[vm]]
+  memory   = "1gb"
+  cpu_kind = "shared"
+  cpus     = 1
+
+# ── Non-secret environment variables ─────────────────────────────────────────
+# Crawler tuning defaults — override via `fly secrets set` for sensitive values.
+# These are safe to commit (no credentials, no API keys).
+[env]
+  CRAWL4AI_HEADLESS        = "true"
+  CRAWL4AI_PAGE_TIMEOUT_MS = "45000"
+  CRAWL4AI_WAIT_UNTIL      = "domcontentloaded"
+  CRAWL4AI_MAX_CONCURRENT  = "3"
+  REQUEST_TIMEOUT          = "20"
+  MAX_RETRIES              = "4"
+  REQUEST_DELAY_SECONDS    = "2.0"
+  REQUEST_DELAY_JITTER     = "1.0"
+  RESPECT_ROBOTS_TXT       = "true"
+
+# ── Health check ──────────────────────────────────────────────────────────────
+[[services.http_checks]]
+  interval      = "30s"
+  timeout       = "5s"
+  grace_period  = "10s"
+  method        = "GET"
+  path          = "/health"

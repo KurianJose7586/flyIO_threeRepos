@@ -1,0 +1,1298 @@
+{
+  "openapi": "3.1.0",
+  "info": {
+    "title": "FlyIO AI/LLM Service",
+    "description": "LLM plan generation, Qdrant store workflow, and event tracking for the FlyIO Travel Planner",
+    "version": "0.1.0"
+  },
+  "paths": {
+    "/v1/health": {
+      "get": {
+        "tags": [
+          "Health"
+        ],
+        "summary": "Basic Service Health Check",
+        "description": "Returns service status, version, and running environment.",
+        "operationId": "service_health_v1_health_get",
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HealthResponse"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/v1/health/postgres": {
+      "get": {
+        "tags": [
+          "Health"
+        ],
+        "summary": "PostgreSQL Event Tracking Health Check",
+        "description": "Actively verifies connectivity to the PostgreSQL event-tracking database. TrackingService suppresses all database errors so the main API never fails due to a tracking outage \u00e2\u20ac\u201d this endpoint is the way to detect that outage.",
+        "operationId": "postgres_health_v1_health_postgres_get",
+        "responses": {
+          "200": {
+            "description": "PostgreSQL is reachable (or tracking is intentionally disabled)",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/PostgresHealthResponse"
+                }
+              }
+            }
+          },
+          "503": {
+            "description": "PostgreSQL is enabled but unreachable",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/PostgresHealthResponse"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/v1/health/qdrant": {
+      "get": {
+        "tags": [
+          "Health"
+        ],
+        "summary": "Qdrant Vector DB Health Check",
+        "description": "Actively verifies connectivity to the Qdrant instance and checks collection state.",
+        "operationId": "qdrant_health_v1_health_qdrant_get",
+        "responses": {
+          "200": {
+            "description": "Qdrant is reachable",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/QdrantHealthResponse"
+                }
+              }
+            }
+          },
+          "503": {
+            "description": "Qdrant is unreachable",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/QdrantHealthResponse"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/v1/api/generate": {
+      "post": {
+        "tags": [
+          "LLM / AI"
+        ],
+        "summary": "Generate AI Travel Plan & Retrieval Workflow",
+        "description": "Entry point for the AI/LLM planning engine. Accepts a prompt, vectorizes it via EmbeddingService, and queries Qdrant to determine whether relevant source data exists. Returns status='data_found' with a structured TravelPlan (destinations, attractions, hotels, daily schedule, budget, tips) or status='data_required' if source data scraping is needed.",
+        "operationId": "generate_v1_api_generate_post",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/GenerateRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "Workflow executed successfully (data found or required)",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/GenerateResponse"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Malformed request payload"
+          },
+          "422": {
+            "description": "Validation error"
+          },
+          "503": {
+            "description": "Vector DB / LLM provider unavailable"
+          }
+        }
+      }
+    },
+    "/v1/api/store": {
+      "post": {
+        "tags": [
+          "LLM / Store"
+        ],
+        "summary": "Chunk, Vectorize, and Ingest Documents into Qdrant Knowledge Base",
+        "description": "Entry point for document ingestion. Accepts document text or pre-structured document lists, chunks text into overlapping segments, generates batched vector embeddings, and atomically stores vector points and metadata into Qdrant.",
+        "operationId": "store_documents_v1_api_store_post",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/StoreRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "Documents chunked and stored successfully",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/StoreResponse"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Malformed request payload or collection validation mismatch"
+          },
+          "422": {
+            "description": "Validation error"
+          },
+          "503": {
+            "description": "Vector DB / embedding provider unavailable"
+          }
+        }
+      }
+    },
+    "/health": {
+      "get": {
+        "tags": [
+          "Health"
+        ],
+        "summary": "Basic Service Health Check",
+        "description": "Returns service status, version, and running environment.",
+        "operationId": "service_health_health_get",
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HealthResponse"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/health/postgres": {
+      "get": {
+        "tags": [
+          "Health"
+        ],
+        "summary": "PostgreSQL Event Tracking Health Check",
+        "description": "Actively verifies connectivity to the PostgreSQL event-tracking database. TrackingService suppresses all database errors so the main API never fails due to a tracking outage \u00e2\u20ac\u201d this endpoint is the way to detect that outage.",
+        "operationId": "postgres_health_health_postgres_get",
+        "responses": {
+          "200": {
+            "description": "PostgreSQL is reachable (or tracking is intentionally disabled)",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/PostgresHealthResponse"
+                }
+              }
+            }
+          },
+          "503": {
+            "description": "PostgreSQL is enabled but unreachable",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/PostgresHealthResponse"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/health/qdrant": {
+      "get": {
+        "tags": [
+          "Health"
+        ],
+        "summary": "Qdrant Vector DB Health Check",
+        "description": "Actively verifies connectivity to the Qdrant instance and checks collection state.",
+        "operationId": "qdrant_health_health_qdrant_get",
+        "responses": {
+          "200": {
+            "description": "Qdrant is reachable",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/QdrantHealthResponse"
+                }
+              }
+            }
+          },
+          "503": {
+            "description": "Qdrant is unreachable",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/QdrantHealthResponse"
+                }
+              }
+            }
+          }
+        }
+      }
+    }
+  },
+  "components": {
+    "schemas": {
+      "Attraction": {
+        "properties": {
+          "name": {
+            "type": "string",
+            "title": "Name",
+            "description": "Attraction name",
+            "example": "Eiffel Tower"
+          },
+          "destination": {
+            "type": "string",
+            "title": "Destination",
+            "description": "City or region where attraction is located"
+          },
+          "category": {
+            "type": "string",
+            "title": "Category",
+            "description": "Category (e.g., Landmark, Museum, Park, Dining)"
+          },
+          "description": {
+            "type": "string",
+            "title": "Description",
+            "description": "Brief description and visit tips"
+          },
+          "estimated_duration_hours": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Estimated Duration Hours",
+            "description": "Recommended visit duration in hours"
+          }
+        },
+        "type": "object",
+        "required": [
+          "name",
+          "destination",
+          "category",
+          "description"
+        ],
+        "title": "Attraction",
+        "description": "Recommended attraction or point of interest."
+      },
+      "BudgetBreakdown": {
+        "properties": {
+          "currency": {
+            "type": "string",
+            "title": "Currency",
+            "description": "Currency symbol/code",
+            "default": "USD"
+          },
+          "accommodation_est": {
+            "type": "string",
+            "title": "Accommodation Est",
+            "description": "Estimated accommodation cost",
+            "example": "$600"
+          },
+          "activities_est": {
+            "type": "string",
+            "title": "Activities Est",
+            "description": "Estimated activities/tours cost",
+            "example": "$200"
+          },
+          "food_dining_est": {
+            "type": "string",
+            "title": "Food Dining Est",
+            "description": "Estimated meals & dining cost",
+            "example": "$300"
+          },
+          "total_estimated": {
+            "type": "string",
+            "title": "Total Estimated",
+            "description": "Total estimated trip cost",
+            "example": "$1,100"
+          }
+        },
+        "type": "object",
+        "required": [
+          "accommodation_est",
+          "activities_est",
+          "food_dining_est",
+          "total_estimated"
+        ],
+        "title": "BudgetBreakdown",
+        "description": "Estimated trip budget breakdown."
+      },
+      "DaySchedule": {
+        "properties": {
+          "day": {
+            "type": "integer",
+            "title": "Day",
+            "description": "Day number",
+            "example": 1
+          },
+          "title": {
+            "type": "string",
+            "title": "Title",
+            "description": "Focus or title for the day",
+            "example": "Historic Center & Seine Cruise"
+          },
+          "morning": {
+            "type": "string",
+            "title": "Morning",
+            "description": "Morning activities and planned visits"
+          },
+          "afternoon": {
+            "type": "string",
+            "title": "Afternoon",
+            "description": "Afternoon activities and planned visits"
+          },
+          "evening": {
+            "type": "string",
+            "title": "Evening",
+            "description": "Evening activities, dinner recommendation, or relaxation"
+          }
+        },
+        "type": "object",
+        "required": [
+          "day",
+          "title",
+          "morning",
+          "afternoon",
+          "evening"
+        ],
+        "title": "DaySchedule",
+        "description": "Daily itinerary schedule item."
+      },
+      "Destination": {
+        "properties": {
+          "name": {
+            "type": "string",
+            "title": "Name",
+            "description": "Destination name",
+            "example": "Paris, France"
+          },
+          "description": {
+            "type": "string",
+            "title": "Description",
+            "description": "Brief overview of destination"
+          },
+          "recommended_duration_days": {
+            "type": "integer",
+            "title": "Recommended Duration Days",
+            "description": "Suggested duration of stay in days",
+            "example": 3
+          }
+        },
+        "type": "object",
+        "required": [
+          "name",
+          "description",
+          "recommended_duration_days"
+        ],
+        "title": "Destination",
+        "description": "Destination information in travel plan."
+      },
+      "GenerateRequest": {
+        "properties": {
+          "request_id": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Request Id",
+            "description": "Optional caller-supplied request correlation ID. If omitted, one will be generated.",
+            "example": "req_12345"
+          },
+          "prompt": {
+            "type": "string",
+            "title": "Prompt",
+            "description": "Prompt or query describing the plan or task required",
+            "example": "Create a 5-day travel itinerary for Paris with luxury hotels and top sights"
+          },
+          "metadata": {
+            "anyOf": [
+              {
+                "additionalProperties": true,
+                "type": "object"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Metadata",
+            "description": "Arbitrary context or configuration metadata",
+            "example": {
+              "priority": "high",
+              "source": "admin_panel"
+            }
+          }
+        },
+        "type": "object",
+        "required": [
+          "prompt"
+        ],
+        "title": "GenerateRequest",
+        "description": "Incoming request to the LLM generation endpoint."
+      },
+      "GenerateResponse": {
+        "properties": {
+          "success": {
+            "type": "boolean",
+            "title": "Success",
+            "description": "Indicates successful execution of the workflow",
+            "default": true
+          },
+          "request_id": {
+            "type": "string",
+            "title": "Request Id",
+            "description": "Correlated request ID",
+            "example": "req_12345"
+          },
+          "status": {
+            "type": "string",
+            "title": "Status",
+            "description": "'data_found' when plan generated, 'data_required' when scraper needed, or 'generation_failed' when LLM parse failed",
+            "example": "data_found"
+          },
+          "data_found": {
+            "type": "boolean",
+            "title": "Data Found",
+            "description": "True if Qdrant returned relevant knowledge"
+          },
+          "data_required": {
+            "type": "boolean",
+            "title": "Data Required",
+            "description": "True if Admin must trigger scraper/store pipeline"
+          },
+          "results": {
+            "items": {
+              "$ref": "#/components/schemas/SearchResultItem"
+            },
+            "type": "array",
+            "title": "Results",
+            "description": "Retrieved vector items when data is found"
+          },
+          "plan": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/TravelPlan"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "Structured travel plan produced by LLM when data is found and generation succeeds"
+          },
+          "message": {
+            "type": "string",
+            "title": "Message",
+            "description": "Summary explanation of the result"
+          },
+          "metadata": {
+            "anyOf": [
+              {
+                "additionalProperties": true,
+                "type": "object"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Metadata",
+            "description": "Echoed or augmented metadata"
+          }
+        },
+        "type": "object",
+        "required": [
+          "request_id",
+          "status",
+          "data_found",
+          "data_required",
+          "message"
+        ],
+        "title": "GenerateResponse",
+        "description": "Output from the generate workflow indicating retrieval result and optional generated TravelPlan."
+      },
+      "HealthResponse": {
+        "properties": {
+          "status": {
+            "type": "string",
+            "title": "Status",
+            "example": "healthy"
+          },
+          "service": {
+            "type": "string",
+            "title": "Service",
+            "example": "flyio-ai-llm"
+          },
+          "version": {
+            "type": "string",
+            "title": "Version",
+            "example": "0.1.0"
+          },
+          "environment": {
+            "type": "string",
+            "title": "Environment",
+            "example": "development"
+          },
+          "timestamp": {
+            "type": "string",
+            "title": "Timestamp",
+            "example": "2026-08-15T04:10:00Z"
+          },
+          "request_id": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Request Id",
+            "example": "req_12345"
+          }
+        },
+        "type": "object",
+        "required": [
+          "status",
+          "service",
+          "version",
+          "environment",
+          "timestamp"
+        ],
+        "title": "HealthResponse",
+        "description": "Basic service health response."
+      },
+      "Hotel": {
+        "properties": {
+          "name": {
+            "type": "string",
+            "title": "Name",
+            "description": "Hotel or property name",
+            "example": "Le Meurice"
+          },
+          "destination": {
+            "type": "string",
+            "title": "Destination",
+            "description": "Location / city"
+          },
+          "tier": {
+            "type": "string",
+            "title": "Tier",
+            "description": "Price/quality tier (e.g. Budget, Mid-Range, Luxury)"
+          },
+          "description": {
+            "type": "string",
+            "title": "Description",
+            "description": "Property description and highlights"
+          },
+          "estimated_nightly_rate": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Estimated Nightly Rate",
+            "description": "Estimated price per night",
+            "example": "$250/night"
+          }
+        },
+        "type": "object",
+        "required": [
+          "name",
+          "destination",
+          "tier",
+          "description"
+        ],
+        "title": "Hotel",
+        "description": "Recommended accommodation or hotel."
+      },
+      "PostgresHealthResponse": {
+        "properties": {
+          "status": {
+            "type": "string",
+            "title": "Status",
+            "description": "'connected', 'unavailable', or 'disabled'",
+            "example": "connected"
+          },
+          "connected": {
+            "type": "boolean",
+            "title": "Connected",
+            "description": "Boolean flag for easy polling"
+          },
+          "database_enabled": {
+            "type": "boolean",
+            "title": "Database Enabled",
+            "description": "Value of the DATABASE_ENABLED setting"
+          },
+          "request_id": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Request Id",
+            "example": "req_12345"
+          },
+          "timestamp": {
+            "type": "string",
+            "title": "Timestamp",
+            "example": "2026-08-15T04:10:00Z"
+          },
+          "details": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Details",
+            "example": "Connected. Event tracking is active."
+          }
+        },
+        "type": "object",
+        "required": [
+          "status",
+          "connected",
+          "database_enabled",
+          "timestamp"
+        ],
+        "title": "PostgresHealthResponse",
+        "description": "PostgreSQL event-tracking connectivity health check response."
+      },
+      "QdrantHealthResponse": {
+        "properties": {
+          "status": {
+            "type": "string",
+            "title": "Status",
+            "description": "'connected' or 'unavailable'",
+            "example": "connected"
+          },
+          "connected": {
+            "type": "boolean",
+            "title": "Connected",
+            "description": "Boolean flag for easy polling"
+          },
+          "qdrant_url": {
+            "type": "string",
+            "title": "Qdrant Url",
+            "example": "http://localhost:6333"
+          },
+          "collection_name": {
+            "type": "string",
+            "title": "Collection Name",
+            "example": "flyio_knowledge_base"
+          },
+          "collection_exists": {
+            "type": "boolean",
+            "title": "Collection Exists",
+            "description": "Whether configured collection exists"
+          },
+          "vector_size": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Vector Size",
+            "description": "Configured embedding dimension"
+          },
+          "request_id": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Request Id",
+            "example": "req_12345"
+          },
+          "timestamp": {
+            "type": "string",
+            "title": "Timestamp",
+            "example": "2026-08-15T04:10:00Z"
+          },
+          "details": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Details",
+            "example": "Collection ready for search"
+          }
+        },
+        "type": "object",
+        "required": [
+          "status",
+          "connected",
+          "qdrant_url",
+          "collection_name",
+          "collection_exists",
+          "timestamp"
+        ],
+        "title": "QdrantHealthResponse",
+        "description": "Detailed Qdrant vector database health check response."
+      },
+      "SearchResultItem": {
+        "properties": {
+          "id": {
+            "title": "Id",
+            "description": "Document / point ID in Qdrant"
+          },
+          "score": {
+            "type": "number",
+            "title": "Score",
+            "description": "Similarity score (e.g. cosine similarity)",
+            "example": 0.88
+          },
+          "payload": {
+            "additionalProperties": true,
+            "type": "object",
+            "title": "Payload",
+            "description": "Metadata payload stored in vector point"
+          },
+          "text": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Text",
+            "description": "Extracted text snippet or content if present in payload"
+          }
+        },
+        "type": "object",
+        "required": [
+          "id",
+          "score"
+        ],
+        "title": "SearchResultItem",
+        "description": "Individual matched vector document item."
+      },
+      "StoreDocumentItem": {
+        "properties": {
+          "id": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Id",
+            "description": "Optional unique identifier for document/chunk. If omitted, a deterministic UUID will be generated.",
+            "example": "doc_98765"
+          },
+          "text": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Text",
+            "description": "Document text or chunk content",
+            "example": "Fly.io provides global application deployment platform using microVMs."
+          },
+          "content": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Content",
+            "description": "Alias for text content"
+          },
+          "title": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Title",
+            "description": "Optional document title",
+            "example": "Fly.io Architecture Overview"
+          },
+          "destination": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Destination",
+            "description": "Optional city/region destination for travel document",
+            "example": "Paris, France"
+          },
+          "category": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Category",
+            "description": "Optional category (e.g. attraction, hotel, guide)",
+            "example": "attraction"
+          },
+          "source_url": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Source Url",
+            "description": "Optional URL or source location of document",
+            "example": "https://fly.io/docs/architecture"
+          },
+          "metadata": {
+            "additionalProperties": true,
+            "type": "object",
+            "title": "Metadata",
+            "description": "Custom key-value metadata payload to preserve with vector point"
+          },
+          "section_path": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Section Path",
+            "description": "Hierarchical section path / breadcrumbs from the source page (e.g. 'Tokyo > See > Historic temples'), as produced by the scraper's semantic parser. Only used when the parent StoreRequest.pre_chunked=True: embedded alongside the chunk text for retrieval, and part of the deterministic point ID so re-scraping the same section updates it in place.",
+            "example": "Tokyo > See > Historic temples"
+          },
+          "page_title": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Page Title",
+            "description": "Title of the source page, matching the scraper's ChunkResult.page_title. Falls back to `title` when set and this is omitted, and vice versa \u00e2\u20ac\u201d set whichever is more convenient for the caller.",
+            "example": "Tokyo - Wikivoyage"
+          },
+          "chunk_index": {
+            "anyOf": [
+              {
+                "type": "integer",
+                "minimum": 0.0
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Chunk Index",
+            "description": "0-based index of this chunk within its source page, matching the scraper's ChunkResult.chunk_index. Only used when the parent StoreRequest.pre_chunked=True \u00e2\u20ac\u201d ignored otherwise, since this service computes its own chunk_index when it does the splitting.",
+            "example": 0
+          },
+          "content_html": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Content Html",
+            "description": "Cleaned semantic HTML for this chunk, matching the scraper's ChunkResult.content_html. Stored in the point payload if provided; never embedded."
+          }
+        },
+        "type": "object",
+        "title": "StoreDocumentItem",
+        "description": "Individual document or chunk payload to be vectorized and stored."
+      },
+      "StorePointDetail": {
+        "properties": {
+          "id": {
+            "type": "string",
+            "title": "Id",
+            "description": "Qdrant point ID"
+          },
+          "chunk_index": {
+            "type": "integer",
+            "title": "Chunk Index",
+            "description": "Index of chunk within parent document"
+          },
+          "total_chunks": {
+            "type": "integer",
+            "title": "Total Chunks",
+            "description": "Total chunks in parent document"
+          },
+          "text_snippet": {
+            "type": "string",
+            "title": "Text Snippet",
+            "description": "Prefix snippet of chunk text"
+          }
+        },
+        "type": "object",
+        "required": [
+          "id",
+          "chunk_index",
+          "total_chunks",
+          "text_snippet"
+        ],
+        "title": "StorePointDetail",
+        "description": "Details of an individual stored point."
+      },
+      "StoreRequest": {
+        "properties": {
+          "request_id": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Request Id",
+            "description": "Optional correlation request ID. If omitted, one will be generated.",
+            "example": "req_store_123"
+          },
+          "documents": {
+            "anyOf": [
+              {
+                "items": {
+                  "$ref": "#/components/schemas/StoreDocumentItem"
+                },
+                "type": "array"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Documents",
+            "description": "List of document items to be vectorized and stored."
+          },
+          "text": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Text",
+            "description": "Raw document text string to store (single document convenience)",
+            "example": "Fly.io is a platform for running application code globally."
+          },
+          "content": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Content",
+            "description": "Alias for text string"
+          },
+          "title": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Title",
+            "description": "Optional document title when using top-level text"
+          },
+          "destination": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Destination",
+            "description": "Optional destination when using top-level text"
+          },
+          "category": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Category",
+            "description": "Optional category when using top-level text"
+          },
+          "source_url": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Source Url",
+            "description": "Optional source URL when using top-level text"
+          },
+          "collection_name": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Collection Name",
+            "description": "Target Qdrant collection name (defaults to QDRANT_COLLECTION_NAME setting)"
+          },
+          "chunk_size": {
+            "type": "integer",
+            "exclusiveMinimum": 0.0,
+            "title": "Chunk Size",
+            "description": "Maximum character length per text chunk if chunking is performed",
+            "default": 500
+          },
+          "chunk_overlap": {
+            "type": "integer",
+            "minimum": 0.0,
+            "title": "Chunk Overlap",
+            "description": "Character overlap between consecutive chunks",
+            "default": 50
+          },
+          "pre_chunked": {
+            "type": "boolean",
+            "title": "Pre Chunked",
+            "description": "When True, every item in `documents` is treated as one final chunk \u00e2\u20ac\u201d chunk_size/chunk_overlap are ignored and no re-splitting happens. Use this when documents already carry the scraper's own semantic sections (StoreDocumentItem.section_path/chunk_index), so this service doesn't cut across boundaries the scraper already established. See StoreDocumentItem for the per-item fields this mode reads.",
+            "default": false
+          },
+          "metadata": {
+            "additionalProperties": true,
+            "type": "object",
+            "title": "Metadata",
+            "description": "Additional context metadata to attach to all stored points"
+          }
+        },
+        "type": "object",
+        "title": "StoreRequest",
+        "description": "Incoming request for storing/ingesting documents into Qdrant vector database."
+      },
+      "StoreResponse": {
+        "properties": {
+          "success": {
+            "type": "boolean",
+            "title": "Success",
+            "description": "Execution success flag",
+            "default": true
+          },
+          "request_id": {
+            "type": "string",
+            "title": "Request Id",
+            "description": "Correlation request ID"
+          },
+          "status": {
+            "type": "string",
+            "title": "Status",
+            "description": "Status indicator (e.g. 'stored')",
+            "default": "stored"
+          },
+          "stored_count": {
+            "type": "integer",
+            "title": "Stored Count",
+            "description": "Total number of vector points inserted into Qdrant"
+          },
+          "document_ids": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array",
+            "title": "Document Ids",
+            "description": "List of IDs of stored Qdrant vector points"
+          },
+          "points": {
+            "items": {
+              "$ref": "#/components/schemas/StorePointDetail"
+            },
+            "type": "array",
+            "title": "Points",
+            "description": "Details of stored chunks"
+          },
+          "collection_name": {
+            "type": "string",
+            "title": "Collection Name",
+            "description": "Target Qdrant collection name"
+          },
+          "message": {
+            "type": "string",
+            "title": "Message",
+            "description": "Summary message of the store operation"
+          },
+          "metadata": {
+            "additionalProperties": true,
+            "type": "object",
+            "title": "Metadata",
+            "description": "Echoed metadata"
+          }
+        },
+        "type": "object",
+        "required": [
+          "request_id",
+          "stored_count",
+          "document_ids",
+          "collection_name",
+          "message"
+        ],
+        "title": "StoreResponse",
+        "description": "Response returned after successful document chunking and vector storage."
+      },
+      "TravelPlan": {
+        "properties": {
+          "title": {
+            "type": "string",
+            "title": "Title",
+            "description": "Title of the travel itinerary",
+            "example": "5-Day Paris Highlights Itinerary"
+          },
+          "summary": {
+            "type": "string",
+            "title": "Summary",
+            "description": "Executive summary and trip overview"
+          },
+          "destinations": {
+            "items": {
+              "$ref": "#/components/schemas/Destination"
+            },
+            "type": "array",
+            "title": "Destinations",
+            "description": "Target destinations"
+          },
+          "attractions": {
+            "items": {
+              "$ref": "#/components/schemas/Attraction"
+            },
+            "type": "array",
+            "title": "Attractions",
+            "description": "Key attractions"
+          },
+          "hotels": {
+            "items": {
+              "$ref": "#/components/schemas/Hotel"
+            },
+            "type": "array",
+            "title": "Hotels",
+            "description": "Recommended accommodations"
+          },
+          "daily_schedule": {
+            "items": {
+              "$ref": "#/components/schemas/DaySchedule"
+            },
+            "type": "array",
+            "title": "Daily Schedule",
+            "description": "Day-by-day itinerary schedule"
+          },
+          "budget": {
+            "$ref": "#/components/schemas/BudgetBreakdown",
+            "description": "Trip budget breakdown"
+          },
+          "travel_tips": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array",
+            "title": "Travel Tips",
+            "description": "Practical travel tips and local recommendations"
+          }
+        },
+        "type": "object",
+        "required": [
+          "title",
+          "summary",
+          "budget"
+        ],
+        "title": "TravelPlan",
+        "description": "Structured travel plan generated by the AI engine."
+      }
+    }
+  }
+}
