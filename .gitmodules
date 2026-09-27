@@ -1,0 +1,9 @@
+[submodule "flyio-admin"]
+	path = flyio-admin
+	url = https://github.com/Kanishk2018/flyio-admin.git
+[submodule "flyio-ai-llm"]
+	path = flyio-ai-llm
+	url = https://github.com/Kanishk2018/flyio-ai-llm.git
+[submodule "flyio-scraper-service"]
+	path = flyio-scraper-service
+	url = https://github.com/Kanishk2018/flyio-scraper-service.git

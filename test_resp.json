@@ -1,0 +1,235 @@
+{
+  "success": true,
+  "request_id": "req_179b4e9dfd51",
+  "status": "data_found",
+  "data_found": true,
+  "data_required": false,
+  "results": [
+    {
+      "id": "eee10399-2f87-5004-8d9c-a8c1b9264b2c",
+      "score": 0.6965022,
+      "payload": {
+        "text": "Museums",
+        "title": "Jaipur \u2013 Travel guide at Wikivoyage",
+        "destination": null,
+        "category": null,
+        "source_url": "https://en.wikivoyage.org/wiki/Jaipur",
+        "section_path": "Jaipur > See",
+        "content_html": "<h3>Museums</h3>",
+        "chunk_index": 27,
+        "total_chunks": 57,
+        "parent_doc_id": "doc_105c95b41369",
+        "metadata": {
+          "source_url": "https://en.wikivoyage.org/wiki/Jaipur",
+          "title": "Jaipur \u2013 Travel guide at Wikivoyage",
+          "section_path": "Jaipur > See",
+          "chunk_index": 27
+        }
+      },
+      "text": "Museums"
+    },
+    {
+      "id": "b8b835db-f850-50da-ad55-ee23ced0e764",
+      "score": 0.68613625,
+      "payload": {
+        "text": "auffeur-driven cars to Jaipur. Get around [ edit ] \u007f&apos;\\\"`UNIQ--maplink-0000000D-QINU`\\\"&apos;\u007f&lt;/div>Map of Jaipur\",\"title\":\"\",\"url\":\"\",\"width\":\"520\",\"zoom\":\"13\"},\"body\":{\"extsrc\":\"\"}}'> 26\u00b055\u203230\u2033N 75\u00b049\u203223\u2033E Map of Jaipur By RTDC bus [ edit ] It is the best and cheaper way to visit the Jaipur Local Sights by RTDC (Rajasthan Tourism Dept. Corp.) There will be one guide with each bus to give you brief info about all sights. The full day tour, as of 2019, costs \u20b9600. By metro [ edit ]",
+        "title": "Jaipur - Wikivoyage",
+        "destination": "Jaipur",
+        "category": null,
+        "source_url": "https://en.wikivoyage.org/wiki/Jaipur",
+        "section_path": null,
+        "content_html": null,
+        "chunk_index": 29,
+        "total_chunks": 192,
+        "parent_doc_id": "doc_105c95b41369",
+        "metadata": {}
+      },
+      "text": "auffeur-driven cars to Jaipur. Get around [ edit ] \u007f&apos;\\\"`UNIQ--maplink-0000000D-QINU`\\\"&apos;\u007f&lt;/div>Map of Jaipur\",\"title\":\"\",\"url\":\"\",\"width\":\"520\",\"zoom\":\"13\"},\"body\":{\"extsrc\":\"\"}}'> 26\u00b055\u203230\u2033N 75\u00b049\u203223\u2033E Map of Jaipur By RTDC bus [ edit ] It is the best and cheaper way to visit the Jaipur Local Sights by RTDC (Rajasthan Tourism Dept. Corp.) There will be one guide with each bus to give you brief info about all sights. The full day tour, as of 2019, costs \u20b9600. By metro [ edit ]"
+    },
+    {
+      "id": "efd551aa-7b1a-54b5-99f1-359cd050449f",
+      "score": 0.68613285,
+      "payload": {
+        "text": "Contents\n\n- 1 Understand 1.1 History 1.2 Climate 1.3 Read 1.4 Tourist information\n- 2 Get in 2.1 By plane 2.2 By train 2.3 By bus 2.4 By car\n- 3 Get around 3.1 By RTDC bus 3.2 By metro 3.3 By autorickshaw 3.4 By local bus 3.5 By cycle-rickshaw 3.6 On foot 3.7 By taxi 3.8 By car\n- 4 Fees and permits 4.1 Composite tickets\n- 5 See 5.1 Amber Fort 5.2 Forts 5.3 Palaces 5.4 Temples 5.5 Monuments 5.6 Gardens 5.7 Museums 5.8 Other\n- 6 Do 6.1 Parks 6.2 Nearby 6.3 Festivals\n- 7 Learn\n- 8 Buy 8.1 Jewels 8.2 Rajais\n- 9 Eat 9.1 Budget 9.1.1 Sweet 9.1.2 Savoury 9.2 Mid-range 9.3 Splurge\n- 10 Drink 10.1 Coffee 10.2 Alcohol 10.3 Night clubs\n- 11 Sleep 11.1 Budget 11.2 Mid-range 11.3 Splurge\n- 12 Stay safe 12.1 The gem scam 12.2 Hospitals\n- 13 Go next\n\n- 1.1 History\n- 1.2 Climate\n- 1.3 Read\n- 1.4 Tourist information\n\n- 2.1 By plane\n- 2.2 By train\n- 2.3 By bus\n- 2.4 By car\n\n- 3.1 By RTDC bus\n- 3.2 By metro\n- 3.3 By autorickshaw\n- 3.4 By local bus\n- 3.5 By cycle-rickshaw\n- 3.6 On foot\n- 3.7 By taxi\n- 3.8 By car\n\n- 4.1 Composite tickets\n\n- 5.1 Amber Fort\n- 5.2 Forts\n- 5.3 Palaces\n- 5.4 Temples\n- 5.5 Monuments\n- 5.6 Gardens\n- 5.7 Museums\n- 5.8 Other\n\n- 6.1 Parks\n- 6.2 Nearby\n- 6.3 Festivals\n\n- 8.1 Jewels\n- 8.2 Rajais\n\n- 9.1 Budget 9.1.1 Sweet 9.1.2 Savoury\n- 9.2 Mid-range\n- 9.3 Splurge\n\n- 9.1.1 Sweet\n- 9.1.2 Savoury\n\n- 10.1 Coffee\n- 10.2 Alcohol\n- 10.3 Night clubs\n\n- 11.1 Budget\n- 11.2 Mid-range\n- 11.3 Splurge\n\n- 12.1 The gem scam\n- 12.2 Hospitals\n\nShow: map (resizable) table | help\nQuery area: Radius/km:, center: Area: SW: NE:\nWikidata Wikipedia language: Sort by wikipedia viewcount Filters religious settlements SPARQL: | OpenStreetMap Filters viewpoint historic museum AUX:\n | \n\nWikidata\n\nOpenStreetMap",
+        "title": "Jaipur \u2013 Travel guide at Wikivoyage",
+        "destination": null,
+        "category": null,
+        "source_url": "https://en.wikivoyage.org/wiki/Jaipur",
+        "section_path": "Jaipur > Contents",
+        "content_html": "<h2>Contents</h2>\n<ul><li>1 Understand 1.1 History 1.2 Climate 1.3 Read 1.4 Tourist information</li><li>2 Get in 2.1 By plane 2.2 By train 2.3 By bus 2.4 By car</li><li>3 Get around 3.1 By RTDC bus 3.2 By metro 3.3 By autorickshaw 3.4 By local bus 3.5 By cycle-rickshaw 3.6 On foot 3.7 By taxi 3.8 By car</li><li>4 Fees and permits 4.1 Composite tickets</li><li>5 See 5.1 Amber Fort 5.2 Forts 5.3 Palaces 5.4 Temples 5.5 Monuments 5.6 Gardens 5.7 Museums 5.8 Other</li><li>6 Do 6.1 Parks 6.2 Nearby 6.3 Festivals</li><li>7 Learn</li><li>8 Buy 8.1 Jewels 8.2 Rajais</li><li>9 Eat 9.1 Budget 9.1.1 Sweet 9.1.2 Savoury 9.2 Mid-range 9.3 Splurge</li><li>10 Drink 10.1 Coffee 10.2 Alcohol 10.3 Night clubs</li><li>11 Sleep 11.1 Budget 11.2 Mid-range 11.3 Splurge</li><li>12 Stay safe 12.1 The gem scam 12.2 Hospitals</li><li>13 Go next</li></ul>\n<ul><li>1.1 History</li><li>1.2 Climate</li><li>1.3 Read</li><li>1.4 Tourist information</li></ul>\n<ul><li>2.1 By plane</li><li>2.2 By train</li><li>2.3 By bus</li><li>2.4 By car</li></ul>\n<ul><li>3.1 By RTDC bus</li><li>3.2 By metro</li><li>3.3 By autorickshaw</li><li>3.4 By local bus</li><li>3.5 By cycle-rickshaw</li><li>3.6 On foot</li><li>3.7 By taxi</li><li>3.8 By car</li></ul>\n<ul><li>4.1 Composite tickets</li></ul>\n<ul><li>5.1 Amber Fort</li><li>5.2 Forts</li><li>5.3 Palaces</li><li>5.4 Temples</li><li>5.5 Monuments</li><li>5.6 Gardens</li><li>5.7 Museums</li><li>5.8 Other</li></ul>\n<ul><li>6.1 Parks</li><li>6.2 Nearby</li><li>6.3 Festivals</li></ul>\n<ul><li>8.1 Jewels</li><li>8.2 Rajais</li></ul>\n<ul><li>9.1 Budget 9.1.1 Sweet 9.1.2 Savoury</li><li>9.2 Mid-range</li><li>9.3 Splurge</li></ul>\n<ul><li>9.1.1 Sweet</li><li>9.1.2 Savoury</li></ul>\n<ul><li>10.1 Coffee</li><li>10.2 Alcohol</li><li>10.3 Night clubs</li></ul>\n<ul><li>11.1 Budget</li><li>11.2 Mid-range</li><li>11.3 Splurge</li></ul>\n<ul><li>12.1 The gem scam</li><li>12.2 Hospitals</li></ul>\n<table><tr><td>Show: map (resizable) table | help</td></tr><tr><td>Query area: Radius/km:, center: Area: SW: NE:</td></tr><tr><td>Wikidata Wikipedia language: Sort by wikipedia viewcount Filters religious settlements SPARQL:</td><td>OpenStreetMap Filters viewpoint historic museum AUX:</td></tr><tr><td></td><td></td></tr></table>\n<h3>Wikidata</h3>\n<h3>OpenStreetMap</h3>",
+        "chunk_index": 2,
+        "total_chunks": 57,
+        "parent_doc_id": "doc_105c95b41369",
+        "metadata": {
+          "source_url": "https://en.wikivoyage.org/wiki/Jaipur",
+          "title": "Jaipur \u2013 Travel guide at Wikivoyage",
+          "section_path": "Jaipur > Contents",
+          "chunk_index": 2
+        }
+      },
+      "text": "Contents\n\n- 1 Understand 1.1 History 1.2 Climate 1.3 Read 1.4 Tourist information\n- 2 Get in 2.1 By plane 2.2 By train 2.3 By bus 2.4 By car\n- 3 Get around 3.1 By RTDC bus 3.2 By metro 3.3 By autorickshaw 3.4 By local bus 3.5 By cycle-rickshaw 3.6 On foot 3.7 By taxi 3.8 By car\n- 4 Fees and permits 4.1 Composite tickets\n- 5 See 5.1 Amber Fort 5.2 Forts 5.3 Palaces 5.4 Temples 5.5 Monuments 5.6 Gardens 5.7 Museums 5.8 Other\n- 6 Do 6.1 Parks 6.2 Nearby 6.3 Festivals\n- 7 Learn\n- 8 Buy 8.1 Jewels 8.2 Rajais\n- 9 Eat 9.1 Budget 9.1.1 Sweet 9.1.2 Savoury 9.2 Mid-range 9.3 Splurge\n- 10 Drink 10.1 Coffee 10.2 Alcohol 10.3 Night clubs\n- 11 Sleep 11.1 Budget 11.2 Mid-range 11.3 Splurge\n- 12 Stay safe 12.1 The gem scam 12.2 Hospitals\n- 13 Go next\n\n- 1.1 History\n- 1.2 Climate\n- 1.3 Read\n- 1.4 Tourist information\n\n- 2.1 By plane\n- 2.2 By train\n- 2.3 By bus\n- 2.4 By car\n\n- 3.1 By RTDC bus\n- 3.2 By metro\n- 3.3 By autorickshaw\n- 3.4 By local bus\n- 3.5 By cycle-rickshaw\n- 3.6 On foot\n- 3.7 By taxi\n- 3.8 By car\n\n- 4.1 Composite tickets\n\n- 5.1 Amber Fort\n- 5.2 Forts\n- 5.3 Palaces\n- 5.4 Temples\n- 5.5 Monuments\n- 5.6 Gardens\n- 5.7 Museums\n- 5.8 Other\n\n- 6.1 Parks\n- 6.2 Nearby\n- 6.3 Festivals\n\n- 8.1 Jewels\n- 8.2 Rajais\n\n- 9.1 Budget 9.1.1 Sweet 9.1.2 Savoury\n- 9.2 Mid-range\n- 9.3 Splurge\n\n- 9.1.1 Sweet\n- 9.1.2 Savoury\n\n- 10.1 Coffee\n- 10.2 Alcohol\n- 10.3 Night clubs\n\n- 11.1 Budget\n- 11.2 Mid-range\n- 11.3 Splurge\n\n- 12.1 The gem scam\n- 12.2 Hospitals\n\nShow: map (resizable) table | help\nQuery area: Radius/km:, center: Area: SW: NE:\nWikidata Wikipedia language: Sort by wikipedia viewcount Filters religious settlements SPARQL: | OpenStreetMap Filters viewpoint historic museum AUX:\n | \n\nWikidata\n\nOpenStreetMap"
+    },
+    {
+      "id": "5cbf017a-663e-558b-ae88-584e10ff7afa",
+      "score": 0.6716968,
+      "payload": {
+        "text": "Palaces",
+        "title": "Jaipur \u2013 Travel guide at Wikivoyage",
+        "destination": null,
+        "category": null,
+        "source_url": "https://en.wikivoyage.org/wiki/Jaipur",
+        "section_path": "Jaipur > See",
+        "content_html": "<h3>Palaces</h3>",
+        "chunk_index": 19,
+        "total_chunks": 57,
+        "parent_doc_id": "doc_105c95b41369",
+        "metadata": {
+          "source_url": "https://en.wikivoyage.org/wiki/Jaipur",
+          "title": "Jaipur \u2013 Travel guide at Wikivoyage",
+          "section_path": "Jaipur > See",
+          "chunk_index": 19
+        }
+      },
+      "text": "Palaces"
+    },
+    {
+      "id": "5602945b-0a85-5842-871e-955a8bf06a4e",
+      "score": 0.6679611,
+      "payload": {
+        "text": "Temples",
+        "title": "Jaipur \u2013 Travel guide at Wikivoyage",
+        "destination": null,
+        "category": null,
+        "source_url": "https://en.wikivoyage.org/wiki/Jaipur",
+        "section_path": "Jaipur > See",
+        "content_html": "<h3>Temples</h3>",
+        "chunk_index": 21,
+        "total_chunks": 57,
+        "parent_doc_id": "doc_105c95b41369",
+        "metadata": {
+          "source_url": "https://en.wikivoyage.org/wiki/Jaipur",
+          "title": "Jaipur \u2013 Travel guide at Wikivoyage",
+          "section_path": "Jaipur > See",
+          "chunk_index": 21
+        }
+      },
+      "text": "Temples"
+    }
+  ],
+  "plan": {
+    "title": "3-Day Historical Jaipur Itinerary",
+    "summary": "Explore Jaipur's iconic forts, palaces, and astronomical marvels over three days, blending guided tours, local cuisine, and cultural immersion.",
+    "destinations": [
+      {
+        "name": "Jaipur",
+        "description": "The Pink City of Rajasthan, famed for its royal heritage, vibrant markets, and UNESCO World Heritage sites.",
+        "recommended_duration_days": 3
+      }
+    ],
+    "attractions": [
+      {
+        "name": "Amber Fort",
+        "destination": "Jaipur",
+        "category": "Fort",
+        "description": "A majestic hilltop fort with intricate frescoes and mirror work; take an elephant ride or jeep up to the entrance.",
+        "estimated_duration_hours": 3.0
+      },
+      {
+        "name": "City Palace",
+        "destination": "Jaipur",
+        "category": "Palace",
+        "description": "A blend of Rajasthani and Mughal architecture housing museums, courtyards, and the Chandra Mahal.",
+        "estimated_duration_hours": 2.0
+      },
+      {
+        "name": "Jantar Mantar",
+        "destination": "Jaipur",
+        "category": "Observatory",
+        "description": "UNESCO-listed astronomical instrument complex; great for photography and learning about ancient science.",
+        "estimated_duration_hours": 1.5
+      },
+      {
+        "name": "Hawa Mahal",
+        "destination": "Jaipur",
+        "category": "Landmark",
+        "description": "The 'Palace of Winds' with its honeycomb fa\u00e7ade; best visited early morning to avoid crowds.",
+        "estimated_duration_hours": 1.0
+      },
+      {
+        "name": "Nahargarh Fort",
+        "destination": "Jaipur",
+        "category": "Fort",
+        "description": "Offers panoramic sunset views over the city; ideal for an evening stroll and light snacks.",
+        "estimated_duration_hours": 2.0
+      },
+      {
+        "name": "Albert Hall Museum",
+        "destination": "Jaipur",
+        "category": "Museum",
+        "description": "Rajasthan's oldest museum showcasing royal artifacts, textiles, and sculptures.",
+        "estimated_duration_hours": 1.5
+      }
+    ],
+    "hotels": [
+      {
+        "name": "Zostel Jaipur",
+        "destination": "Jaipur",
+        "tier": "Budget",
+        "description": "Clean dorms and private rooms in the heart of the old city, with a rooftop lounge and communal kitchen.",
+        "estimated_nightly_rate": "$25/night"
+      },
+      {
+        "name": "Hotel Pearl Palace",
+        "destination": "Jaipur",
+        "tier": "Mid-Range",
+        "description": "Heritage-style boutique hotel near City Palace, offering comfortable rooms and a rooftop pool.",
+        "estimated_nightly_rate": "$80/night"
+      },
+      {
+        "name": "Rambagh Palace",
+        "destination": "Jaipur",
+        "tier": "Luxury",
+        "description": "Former royal residence turned 5\u2011star hotel, featuring opulent suites, spa, and fine\u2011dining restaurants.",
+        "estimated_nightly_rate": "$350/night"
+      }
+    ],
+    "daily_schedule": [
+      {
+        "day": 1,
+        "title": "Amber Fort & Jaipur Introduction",
+        "morning": "Pick up from hotel; drive to Amber Fort. Guided tour of the fort, Sheesh Mahal, and Ganesh Pol.",
+        "afternoon": "Lunch at 1135 AD (fort restaurant). Return to city; visit City Palace and its museum.",
+        "evening": "Stroll through Bapu Bazaar, dinner at Laxmi Misthan Bhandar (LMB) for Rajasthani thali."
+      },
+      {
+        "day": 2,
+        "title": "Astronomy & Architectural Gems",
+        "morning": "Visit Jantar Mantar; explore the massive sundials and instruments.",
+        "afternoon": "Walk to Hawa Mahal; photo stop. Lunch at Rawat Misthan Bhandar (RMB). Visit Albert Hall Museum.",
+        "evening": "Enjoy a cultural dinner with folk dance at Chokhi Dhani (optional) or relax at hotel."
+      },
+      {
+        "day": 3,
+        "title": "Fort Views & Departure",
+        "morning": "Leisurely breakfast; head to Nahargarh Fort for a mid\u2011morning hike and city vistas.",
+        "afternoon": "Lunch at Padao (restaurant on the fort). Return to hotel for checkout; free time for souvenir shopping in Johari Bazaar.",
+        "evening": "Transfer to Jaipur airport or railway station."
+      }
+    ],
+    "budget": {
+      "currency": "USD",
+      "accommodation_est": "$300 (mid\u2011range 3 nights)",
+      "activities_est": "$60 (entry fees, guided tours, RTDC bus)",
+      "food_dining_est": "$120 (average $40/day)",
+      "total_estimated": "$480"
+    },
+    "travel_tips": [
+      "Hire a local driver or use the RTDC guided bus (\u20b9600 \u2248 $8) for hassle\u2011free sightseeing.",
+      "Carry cash in INR for small vendors; most attractions accept cards but not all street stalls.",
+      "Dress modestly for temple visits and carry a scarf for sun protection.",
+      "Start early at popular sites like Amber Fort to beat the crowds and heat."
+    ]
+  },
+  "message": "Relevant data found (5 matches). Travel plan generated successfully.",
+  "metadata": {}
+}
