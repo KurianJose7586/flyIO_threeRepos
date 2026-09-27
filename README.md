@@ -38,8 +38,18 @@ It is safe to re-run. Any `.env` it changes is backed up as
 powershell -ExecutionPolicy Bypass -File .\run_all.ps1
 ```
 
-Four windows open. Then go to **http://localhost:5173 → Knowledge Base →
-By destination**, type a destination and click **Find sources**.
+Four windows open, a couple of seconds apart. Then go to
+**http://localhost:5173 → Knowledge Base → By destination**, type a
+destination and click **Find sources**.
+
+If a window shows `[error 2147942632 (0x800700e8) when launching …]`, Windows
+Terminal failed to open it. Close the windows and run everything in one
+window instead — output is prefixed with each service's name, and Ctrl+C
+stops them all:
+
+```powershell
+powershell -ExecutionPolicy Bypass -File .\run_all.ps1 -OneWindow
+```
 
 **Check search on its own**, without starting anything:
 

@@ -1,6 +1,6 @@
 <#
 .SYNOPSIS
-  Starts all four FlyIO processes, each in its own window.
+  Starts all four FlyIO processes.
 
 .DESCRIPTION
   Paths are relative to this script, so it runs the services in this
@@ -11,14 +11,63 @@
     flyio-admin (API)       port from flyio-admin/.env (PORT, default 3000)
     flyio-admin (frontend)  http://localhost:5173   <- open this
 
+  By default each process gets its own window, opened a few seconds apart.
+  With -OneWindow all four run in this window instead, output prefixed with
+  the service name; Ctrl+C stops them all.
+
+.PARAMETER OneWindow
+  Run everything in the current window (via `concurrently`, installed with
+  the admin's npm packages). Use this if separate windows fail to open.
+
 .PARAMETER DryRun
-  Print the command each window would run, without starting anything.
+  Print what would be started, without starting anything.
 #>
 [CmdletBinding()]
-param([switch]$DryRun)
+param(
+    [switch]$OneWindow,
+    [switch]$DryRun
+)
 
 # Pure ASCII on purpose - see the note at the top of setup.ps1.
 $Root = $PSScriptRoot
+$NotWindows = ($IsLinux -or $IsMacOS)   # $null on Windows PowerShell 5.1
+
+if ($OneWindow) {
+    # Each command runs through the platform shell from the repository root,
+    # so relative folder names need no quoting even when the root path has
+    # spaces. Services use their virtualenv's Python directly rather than an
+    # activate script; dependencies are setup.ps1's job.
+    if ($NotWindows) { $venvPy = ".venv/bin/python"; $frontend = "flyio-admin/frontend" }
+    else { $venvPy = ".venv\Scripts\python.exe"; $frontend = "flyio-admin\frontend" }
+
+    $names = "llm,scraper,admin,web"
+    $commands = @(
+        "cd flyio-ai-llm && $venvPy -m uvicorn app.main:app --host 0.0.0.0 --port 8000 --reload",
+        "cd flyio-scraper-service && $venvPy -m uvicorn src.main:app --host 0.0.0.0 --port 8080 --reload",
+        "cd flyio-admin && npm run dev",
+        "cd $frontend && npm run dev"
+    )
+    $concurrently = Join-Path (Join-Path (Join-Path (Join-Path $Root "flyio-admin") "node_modules") "concurrently") (Join-Path "dist" (Join-Path "bin" "index.js"))
+
+    if ($DryRun) {
+        Write-Host "node $concurrently --names $names"
+        foreach ($c in $commands) { Write-Host "  $c" }
+        return
+    }
+    if (-not (Test-Path -LiteralPath $concurrently)) {
+        throw "concurrently is not installed. Run setup.ps1 first (it installs the admin's npm packages)."
+    }
+    Write-Host "Starting all services in this window. Ctrl+C stops them all."
+    Write-Host "Open http://localhost:5173 -> Knowledge Base -> By destination"
+    Write-Host ""
+    Push-Location -LiteralPath $Root
+    try {
+        & node $concurrently --names $names --prefix-colors "magenta,cyan,green,yellow" @commands
+    } finally {
+        Pop-Location
+    }
+    return
+}
 
 function Start-ServiceWindow([string]$Title, [string]$Dir, [string]$Command) {
     # Single quotes inside a single-quoted PowerShell string are doubled, so a
@@ -32,6 +81,11 @@ function Start-ServiceWindow([string]$Title, [string]$Dir, [string]$Command) {
     }
     Write-Host "Starting $Title..."
     Start-Process powershell -ArgumentList "-NoExit", "-Command", $full
+    # On Windows 11 each new console is handed to Windows Terminal. Several
+    # hand-offs at once can race, and one fails with
+    # "[error 2147942632 (0x800700e8) when launching ...]" - "the pipe is
+    # being closed". Spacing the launches out avoids it.
+    Start-Sleep -Seconds 2
 }
 
 $venvSetup = "if (!(Test-Path .venv)) { python -m venv .venv }; .\.venv\Scripts\activate; pip install -r requirements.txt"
@@ -51,5 +105,7 @@ Start-ServiceWindow "flyio-admin frontend" (Join-Path (Join-Path $Root "flyio-ad
 if (-not $DryRun) {
     Write-Host ""
     Write-Host "All services started in separate windows."
+    Write-Host "If a window shows 'error 2147942632 (0x800700e8)', close them all and run:"
+    Write-Host "    .\run_all.ps1 -OneWindow"
     Write-Host "Open http://localhost:5173 -> Knowledge Base -> By destination"
 }

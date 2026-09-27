@@ -64,9 +64,34 @@ function Get-VenvPython([string]$ServiceDir) {
     return Join-Path $ServiceDir ".venv\Scripts\python.exe"
 }
 
+# Native commands are judged by their exit code only. Windows PowerShell 5.1
+# turns a native command's redirected stderr into error records, and under the
+# script-wide "Stop" the first one is fatal - so a tool merely printing a
+# warning could end setup. Errors are therefore non-fatal inside the call.
 function Invoke-Native([string]$What, [scriptblock]$Command) {
+    $ErrorActionPreference = "Continue"
     & $Command
     if ($LASTEXITCODE -ne 0) { throw "$What failed (exit code $LASTEXITCODE)." }
+}
+
+# Version of a Python candidate such as @("py", "-3"), or $null when it is
+# missing or unusable. Probing is expected to fail for some candidates: `py
+# -3.11` with only 3.13 installed prints "No suitable Python runtime found",
+# and the Microsoft Store `python` alias exits 9009. That stderr used to end
+# the script on 5.1 before the next candidate was tried.
+function Get-PythonVersion([string[]]$Candidate) {
+    if (-not (Get-Command $Candidate[0] -ErrorAction SilentlyContinue)) { return $null }
+    $ErrorActionPreference = "Continue"
+    $pyArgs = @($Candidate | Select-Object -Skip 1)
+    try {
+        $out = & $Candidate[0] @pyArgs -c "import sys; print('%d.%d' % sys.version_info[:2])" 2>$null
+    } catch {
+        return $null
+    }
+    if ($LASTEXITCODE -ne 0) { return $null }
+    $line = @($out | Where-Object { "$_" -match '^\d+\.\d+$' } | Select-Object -First 1)
+    if ($line.Count -eq 0) { return $null }
+    return [version]"$($line[0])"
 }
 
 # -- .env helpers ------------------------------------------------------------
@@ -142,11 +167,11 @@ function Initialize-EnvFile([string]$ServiceDir, [string]$CopyFrom) {
 Write-Step "Checking prerequisites"
 
 $Python = $null
+# 3.11 first when present (the version the pinned requirements were verified
+# on), then whatever newer Python is installed.
 foreach ($candidate in @(@("py", "-3.11"), @("py", "-3"), @("python"), @("python3"))) {
-    if (-not (Get-Command $candidate[0] -ErrorAction SilentlyContinue)) { continue }
-    $pyArgs = @($candidate | Select-Object -Skip 1)
-    $version = & $candidate[0] @pyArgs -c "import sys; print('%d.%d' % sys.version_info[:2])" 2>$null
-    if ($LASTEXITCODE -eq 0 -and $version -and [version]$version -ge [version]"3.11") {
+    $version = Get-PythonVersion $candidate
+    if ($version -and $version -ge [version]"3.11") {
         $Python = $candidate
         Write-Ok "Python $version ($($candidate -join ' '))"
         break
@@ -265,9 +290,14 @@ if (-not (Test-Path -LiteralPath $scraperPy)) {
 } else {
     Push-Location -LiteralPath $Scraper
     try {
+        # Judged by exit code, like Invoke-Native.
+        $ErrorActionPreference = "Continue"
         & $scraperPy (Join-Path "scripts" "try_discovery.py") "Jabalpur"
         $checkExit = $LASTEXITCODE
-    } finally { Pop-Location }
+    } finally {
+        $ErrorActionPreference = "Stop"
+        Pop-Location
+    }
     if ($checkExit -eq 0) {
         Write-Ok "discovery returned real results"
     } else {
