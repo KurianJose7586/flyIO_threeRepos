@@ -202,7 +202,17 @@ async def _crawl_async(source_cfg: dict) -> list:
             try:
                 async with semaphore:
                     result = await crawler.arun(url=url, config=run_cfg)
-                if result and result.success:
+                # result.success only means the page *loaded*: a 404 or a 403
+                # bot-block renders fine, so its error page used to be parsed,
+                # chunked and embedded as destination content ("Error code:
+                # 404" filed under the destination). An error status is
+                # handled like any other crawl4ai failure — the fallback below
+                # accepts only a 200, so it rejects a real 404 but can still
+                # recover a page whose 403 was specific to the headless browser.
+                status = getattr(result, "status_code", None) if result else None
+                if result and result.success and status is not None and status >= 400:
+                    print(f"  [crawl4ai HTTP {status}] {url} -- error page, not content; falling back")
+                elif result and result.success:
                     html = result.cleaned_html or result.html
                     page_title = (result.metadata or {}).get("title") or url
                     internal = (result.links or {}).get("internal", [])

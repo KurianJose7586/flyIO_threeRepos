@@ -24,6 +24,7 @@ exercised rather than sidestepped by pointing the crawler at `localhost`
 | `test_destination_ingestion.py` | 35 — discovery filtering and ranking, auto-crawl selection, chunks reaching Postgres and the vector store, re-run deduplication, the explicit-selection fence, auth and error mapping |
 | `test_llm_data_required.py` | 10 — `data_required` → discover → ingest → retry, only trusted domains on that unattended path, and provenance in the event log |
 | `test_review_regressions.py` | 13 — the four code-review findings: stored-vs-canonical URL dedup, explicit selection not depending on a re-search, `data_required` skipping indexed pages, and input validation |
+| `test_limits.py` | 12 — 40 concurrent discoveries, real crawl throughput, two destinations crawling at once, a dead link (404) not becoming knowledge, dedup against 20,000 knowledge-base rows, and a scraper crash mid-job. Prints its measurements, so a run doubles as a capacity report |
 
 ## Running
 
@@ -44,6 +45,7 @@ container restart. `reset` also clears DB rows and stub state.
 sudo tests/integration/harness/up.sh reset && python3 tests/integration/test_destination_ingestion.py
 sudo tests/integration/harness/up.sh reset && python3 tests/integration/test_llm_data_required.py
 python3 tests/integration/test_review_regressions.py      # resets itself
+python3 tests/integration/test_limits.py                  # resets itself; restarts the scraper
 ```
 
 Needs root: it binds :80 and edits `/etc/hosts`. Logs go to

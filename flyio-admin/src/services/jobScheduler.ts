@@ -1,3 +1,4 @@
+import axios from "axios";
 import { env } from "../config/env";
 import { query } from "../db/pgPool";
 import { pushToLlmStore } from "./kbToLlmStore";
@@ -482,7 +483,7 @@ export function startBackgroundJobScheduler(): void {
   schedulerTimer = setInterval(async () => {
     try {
       const pendingJobs = await query(
-        `SELECT id FROM jobs 
+        `SELECT id, created_at FROM jobs 
          WHERE status IN ('created', 'sent', 'pending', 'running') 
            AND created_at > NOW() - INTERVAL '1 hour'
          LIMIT 10`
@@ -502,8 +503,30 @@ export function startBackgroundJobScheduler(): void {
           } else if (scraperStatus.status && scraperStatus.status !== row.status) {
             await updateJobStatus(jobId, scraperStatus.status);
           }
-        } catch {
-          // Ignore transient poll errors during background cycle
+        } catch (pollErr: unknown) {
+          // Most poll errors are transient, but two are not, and swallowing
+          // them left the job 'sent' forever — the crawler UI spinning
+          // indefinitely, then dropped from this loop after an hour.
+          //
+          // A 404 is final: the scraper keeps jobs in memory, so once it
+          // restarts (a crash, a deploy, a Fly auto-stop) this job is gone
+          // and will never be answered. And an error that outlasts the job
+          // timeout is treated the way the synchronous waiter already treats
+          // it. Both are finalized through processJobOutcome, so the job's
+          // URLs are recorded as failed with the reason rather than vanishing.
+          const lost = axios.isAxiosError(pollErr) && pollErr.response?.status === 404;
+          const ageMs = Date.now() - new Date(row.created_at).getTime();
+          if (lost || ageMs > env.SCRAPER_JOB_TIMEOUT_MS) {
+            const error = lost
+              ? "The scraper service no longer has this job — it most likely restarted while the job was queued or running. Submit it again to retry."
+              : `No answer from the scraper service within ${Math.round(env.SCRAPER_JOB_TIMEOUT_MS / 1000)}s.`;
+            try {
+              await processJobOutcome(jobId, { status: "failed", error });
+              console.warn(`[JobScheduler] Failed orphaned job ${jobId}: ${error}`);
+            } catch {
+              // Leave it for the next cycle.
+            }
+          }
         }
       }
     } catch {

@@ -61,7 +61,14 @@ start() {  # name health-url command...
   local name="$1" url="$2"; shift 2
   if [ "$(up "$url")" != "000" ]; then echo "── $name  (already up)"; return; fi
   echo "── $name"
-  (cd "$ROOT" && NO_PROXY="$NOPROXY" no_proxy="$NOPROXY" nohup "$@" > "$LOG/$name.log" 2>&1 &)
+  # cd first, so `&` backgrounds only nohup. Written as `cd && nohup … &`,
+  # bash backgrounds the whole && list in a forked subshell that keeps this
+  # script's stdout for as long as the service runs — so `up.sh | anything`
+  # never finished.
+  (
+    cd "$ROOT" || exit 1
+    NO_PROXY="$NOPROXY" no_proxy="$NOPROXY" nohup "$@" > "$LOG/$name.log" 2>&1 < /dev/null &
+  )
   wait_for "$url" "$name" && echo "   ok"
 }
 

@@ -15,6 +15,7 @@ Three gates, in order:
 """
 from __future__ import annotations
 
+import ipaddress
 from dataclasses import dataclass
 from urllib.parse import parse_qsl, urlencode, urlparse, urlunparse
 
@@ -77,6 +78,26 @@ _DENIED_EXTENSIONS = (
     ".pdf", ".jpg", ".jpeg", ".png", ".gif", ".webp", ".svg",
     ".zip", ".mp4", ".mp3", ".xml", ".json", ".csv",
 )
+
+# Search results are content anyone can influence through SEO, and the
+# scraper fetches whatever it is handed from inside the deployment's private
+# network. A result pointing at an IP literal or an internal-only name is
+# never a real travel page, but crawling it would be a request forgery
+# against internal services — the cloud metadata endpoint (169.254.169.254),
+# this service itself, or anything on Fly's private network (*.internal,
+# *.flycast). These are rejected outright rather than listed for review.
+#
+# This is a hostname check, not a resolver check: a public name that
+# resolves to a private address still passes. Closing that needs a guard at
+# the fetch layer, which also covers POST /scrape/urls.
+_INTERNAL_SUFFIXES = (
+    ".localhost", ".local", ".internal", ".intranet", ".lan",
+    ".home.arpa", ".corp", ".flycast",
+)
+
+# Longer than any real document URL; beyond this is tracking junk or an
+# attempt to smuggle data through the crawler.
+MAX_URL_LENGTH = 2048
 
 DEFAULT_SCORE = 30
 """Score for a domain that is neither trusted nor denied — surfaced for
@@ -145,19 +166,29 @@ def _matches(domain: str, table) -> bool:
 def canonicalize_url(url: str) -> str:
     """Reduce a URL to a stable identity for deduplication.
 
-    Drops the fragment and tracking parameters, lowercases scheme and host,
-    and removes a trailing slash from non-root paths. Meaningful query
-    parameters are kept and sorted so ordering differences don't split one
-    page into two candidates.
+    Drops the fragment, tracking parameters and any user:password@ part,
+    lowercases scheme and host, and removes a trailing slash from non-root
+    paths. Meaningful query parameters are kept and sorted so ordering
+    differences don't split one page into two candidates.
     """
     parsed = urlparse(url)
     scheme = parsed.scheme.lower()
-    netloc = parsed.netloc.lower()
+    # Rebuilt from hostname and port rather than lowercasing netloc, so a
+    # userinfo section is dropped. Credentials never belong in a search
+    # result, and "holidify.com@evil.example" displays as the trusted site
+    # while actually naming evil.example.
+    host = parsed.hostname or ""
+    if ":" in host:  # IPv6 literal
+        host = f"[{host}]"
+    try:
+        port = parsed.port
+    except ValueError:
+        port = None
     # Drop a redundant default port so :443 and the bare host agree.
-    if netloc.endswith(":443") and scheme == "https":
-        netloc = netloc[:-4]
-    elif netloc.endswith(":80") and scheme == "http":
-        netloc = netloc[:-3]
+    if port and not ((scheme == "https" and port == 443) or (scheme == "http" and port == 80)):
+        netloc = f"{host}:{port}"
+    else:
+        netloc = host
 
     path = parsed.path
     if len(path) > 1 and path.endswith("/"):
@@ -174,17 +205,38 @@ def canonicalize_url(url: str) -> str:
     return urlunparse((scheme, netloc, path, "", query, ""))
 
 
-def is_crawlable(url: str) -> bool:
-    """True if the URL is an absolute http(s) document URL.
+def _is_public_hostname(host: str) -> bool:
+    """False for IP literals, single-label names and internal-only suffixes."""
+    if not host:
+        return False
+    try:
+        ipaddress.ip_address(host)
+        return False  # any IP literal, v4 or v6, public or private
+    except ValueError:
+        pass
+    # No dot covers "localhost", intranet names and integer-encoded IPs
+    # ("2130706433" is 127.0.0.1); a numeric last label covers "127.1".
+    if "." not in host or host.endswith(_INTERNAL_SUFFIXES):
+        return False
+    return any(ch.isalpha() for ch in host.rsplit(".", 1)[-1])
 
-    Mirrors the guard POST /scrape/urls applies, so a candidate that passes
-    here cannot be rejected by the very endpoint it is destined for.
+
+def is_crawlable(url: str) -> bool:
+    """True if the URL is an absolute http(s) document URL on a public host.
+
+    A superset of the guard POST /scrape/urls applies, so a candidate that
+    passes here cannot be rejected by the very endpoint it is destined for.
     """
+    if len(url) > MAX_URL_LENGTH:
+        return False
     try:
         parsed = urlparse(url)
+        parsed.port  # raises ValueError on a malformed or out-of-range port
     except ValueError:
         return False
     if parsed.scheme not in ("http", "https") or not parsed.netloc:
+        return False
+    if not _is_public_hostname((parsed.hostname or "").lower()):
         return False
     return not parsed.path.lower().endswith(_DENIED_EXTENSIONS)
 

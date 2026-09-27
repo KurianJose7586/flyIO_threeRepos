@@ -12,6 +12,7 @@ import pytest
 from fastapi.testclient import TestClient
 
 from src.config.settings import get_settings
+from tests.conftest import wait_for_job
 from src.discovery.filters import (
     DEFAULT_SCORE,
     Candidate,
@@ -362,10 +363,24 @@ def test_discover_returns_ranked_candidates(client: TestClient):
     assert any(c["trusted"] is False for c in body["candidates"])
 
 
-def test_discover_candidates_are_accepted_by_scrape_urls(client: TestClient):
+@pytest.mark.asyncio
+async def test_discover_candidates_are_accepted_by_scrape_urls(client: TestClient, monkeypatch):
     """The contract that makes the automation work: every URL discovery
     returns must pass the validation POST /scrape/urls applies, or the
-    handoff 400s on candidates this service itself produced."""
+    handoff 400s on candidates this service itself produced.
+
+    The crawl is mocked and the job drained before returning. Unmocked, this
+    queued a real browser crawl on the session-wide serial worker: invisible
+    where no browser can launch (it failed instantly), but wherever one can,
+    it tried the real network and every later test that waits on a job timed
+    out queued behind it.
+    """
+
+    async def fake_crawl(urls):
+        return []
+
+    monkeypatch.setattr("src.queue.worker.run_crawl_urls", fake_crawl)
+
     candidates = client.post(
         "/scrape/discover", json={"destination": "Jabalpur"}
     ).json()["candidates"]
@@ -375,6 +390,8 @@ def test_discover_candidates_are_accepted_by_scrape_urls(client: TestClient):
         "/scrape/urls", json={"urls": [c["url"] for c in candidates]}
     )
     assert response.status_code == 202
+    job = await wait_for_job(client, response.json()["job_id"])
+    assert job["status"] == "success"
 
 
 def test_discover_respects_max_urls(client: TestClient):
