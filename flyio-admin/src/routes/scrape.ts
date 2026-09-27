@@ -157,26 +157,56 @@ async function startUrlCrawlJob(
 }
 
 /**
+ * Renders an upstream error body as a sentence.
+ *
+ * A FastAPI `detail` is a string for a raised HTTPException but an *array*
+ * of {loc, msg} objects for a schema rejection (422). Passing the array
+ * straight through put a raw pydantic dump in the API response, so a
+ * two-character destination answered with `[{"type":"string_too_short",
+ * "loc":["body","destination"],...}]` instead of a sentence.
+ */
+function describeUpstreamDetail(data: unknown, fallback: string): string {
+  const detail = (data as { detail?: unknown } | undefined)?.detail;
+
+  if (typeof detail === "string" && detail.trim()) return detail;
+
+  if (Array.isArray(detail)) {
+    const parts = detail
+      .map((entry) => {
+        const e = entry as { loc?: unknown[]; msg?: string };
+        const field = Array.isArray(e.loc)
+          ? e.loc.filter((p) => p !== "body").join(".")
+          : "";
+        if (!e.msg) return "";
+        return field ? `${field}: ${e.msg}` : e.msg;
+      })
+      .filter(Boolean);
+    if (parts.length > 0) return parts.join("; ");
+  }
+
+  return fallback;
+}
+
+/**
  * Translates a failure from the discovery call into a response.
  *
- * The scraper service answers a misconfigured search provider with a 400 and
- * a message naming the fix ("SEARCH_API_KEY is empty but SEARCH_PROVIDER is
- * 'tavily'"), and a dead provider with a 502. Collapsing both into a generic
- * 500 here would throw that away and leave an operator staring at "Internal
- * Server Error" for a missing environment variable, so the upstream status
- * and detail are forwarded as-is.
+ * The status the caller sees has to say whose problem it is, because that
+ * decides who gets paged. The scraper answers a misconfigured search
+ * provider with a 400 naming the fix ("SEARCH_API_KEY is empty but
+ * SEARCH_PROVIDER is 'tavily'"), a bad destination with a 422, and a dead
+ * provider with a 502. Collapsing the client errors into 502 would report a
+ * typo in a text box as "Bad Gateway" and send someone to check whether the
+ * scraper is up.
  */
 function handleDiscoveryError(err: unknown, res: Response): void {
   if (axios.isAxiosError(err) && err.response) {
     const status = err.response.status;
-    const detail =
-      (err.response.data as { detail?: string } | undefined)?.detail ||
-      err.message;
+    const detail = describeUpstreamDetail(err.response.data, err.message);
 
-    // 401 means *this service's* key for the scraper is wrong. Forwarding it
-    // would read as "your admin login expired" and send someone to the wrong
-    // place entirely.
-    if (status === 401) {
+    // 401/403 is *this service's* key for the scraper, not the admin user's
+    // session. Forwarding it would read as "your login expired" and send
+    // someone to the wrong place entirely.
+    if (status === 401 || status === 403) {
       res.status(502).json({
         success: false,
         error: "Bad Gateway",
@@ -186,11 +216,29 @@ function handleDiscoveryError(err: unknown, res: Response): void {
       return;
     }
 
-    res.status(status === 400 ? 400 : 502).json({
-      success: false,
-      error: status === 400 ? "Bad Request" : "Bad Gateway",
-      detail,
-    });
+    // A 404 means the scraper has no /scrape/discover — a version skew
+    // between the two services, not anything the caller did.
+    if (status === 404) {
+      res.status(502).json({
+        success: false,
+        error: "Bad Gateway",
+        detail:
+          "The scraper service has no /scrape/discover endpoint. It is likely running a build from before destination discovery was added.",
+      });
+      return;
+    }
+
+    // Every other 4xx is about what the caller sent, so it keeps its status.
+    if (status >= 400 && status < 500) {
+      res.status(status).json({
+        success: false,
+        error: "Bad Request",
+        detail,
+      });
+      return;
+    }
+
+    res.status(502).json({ success: false, error: "Bad Gateway", detail });
     return;
   }
 
